@@ -1,0 +1,105 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "App users including Orienteurs and Managers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string", "enum": ["ORIENTEUR", "MANAGER"] },
+        "sectorId": { "type": "string" },
+        "email": { "type": "string", "format": "email" }
+      },
+      "required": ["id", "username", "fullName", "role"]
+    },
+    "Sector": {
+      "title": "Sector",
+      "description": "Geographical intervention sector (e.g., Casablanca Nord)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "orienteurId": { "type": "string" }
+      },
+      "required": ["id", "name", "code"]
+    },
+    "TechnicalZone": {
+      "title": "TechnicalZone",
+      "description": "MSAN technical zone within a sector",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "sectorId": { "type": "string" }
+      },
+      "required": ["id", "code", "name", "sectorId"]
+    },
+    "Technician": {
+      "title": "Technician",
+      "description": "Field fiber optic technician receiving tickets via Telegram",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "sectorId": { "type": "string" },
+        "zoneIds": { "type": "string" },
+        "telegramChatId": { "type": "string" },
+        "telegramUsername": { "type": "string" },
+        "telegramActivationToken": { "type": "string" },
+        "telegramActivationStatus": { "type": "string", "enum": ["PENDING", "ACTIVATED", "REVOKED"] },
+        "telegramActivatedAt": { "type": "string", "format": "date-time" },
+        "telegramLinkDisabled": { "type": "boolean" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "fullName", "phone", "sectorId", "isActive"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "Fiber optic SAV repair ticket with full trace and 24h SLA",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ticketNumber": { "type": "string" },
+        "clientNumber": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "clientAddress": { "type": "string" },
+        "technicalZoneId": { "type": "string" },
+        "sectorId": { "type": "string" },
+        "registeredAt": { "type": "string", "format": "date-time" },
+        "currentStatus": { "type": "string" },
+        "isClosed": { "type": "boolean" },
+        "currentAssignedTechId": { "type": "string" },
+        "slaStatus": { "type": "string", "enum": ["ON_TIME", "WARNING", "EXPIRED"] }
+      },
+      "required": ["id", "ticketNumber", "clientNumber", "clientName", "sectorId", "registeredAt", "currentStatus"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Authentication and user profiles for orienteurs and managers"
+    },
+    "/sectors/{sectorId}": {
+      "schema": "Sector",
+      "description": "Geographical dispatching sectors"
+    },
+    "/technicalZones/{zoneId}": {
+      "schema": "TechnicalZone",
+      "description": "Technical MSAN distribution zones"
+    },
+    "/technicians/{technicianId}": {
+      "schema": "Technician",
+      "description": "Roster of 3GCOM fiber technicians"
+    },
+    "/tickets/{ticketId}": {
+      "schema": "Ticket",
+      "description": "SAV tickets collection with status and history"
+    }
+  }
+}

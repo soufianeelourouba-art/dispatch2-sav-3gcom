@@ -1,0 +1,6 @@
+{
+  "name": "3GCOM Dispatch — SAV Fibre Optique",
+  "description": "Application de dispatching terrain et de traçabilité des interventions SAV fibre optique Maroc Telecom pour 3GCOM.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
