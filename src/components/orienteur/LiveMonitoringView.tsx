@@ -161,14 +161,6 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={onOpenSimulator}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-sky-800 bg-sky-50 border border-sky-200 rounded-xl hover:bg-sky-100 transition-colors shadow-xs"
-          >
-            <Smartphone className="w-3.5 h-3.5 text-sky-600" />
-            <span>Ouvrir Console Telegram</span>
-          </button>
-          
-          <button
             onClick={handleExport}
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors shadow-xs"
           >

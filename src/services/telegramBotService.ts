@@ -66,6 +66,11 @@ class TelegramBotService {
     return `https://t.me/${botUser}?start=${token}`;
   }
 
+  public getDirectMobilePortalLink(tech: Technician): string {
+    const base = typeof window !== 'undefined' ? window.location.origin : 'https://dispatch2-sav-3gcom.vercel.app';
+    return `${base}/?tech=${tech.id}`;
+  }
+
   public getWhatsAppShareUrl(tech: Technician): string {
     const link = this.getActivationLink(tech);
     const message = `Bonjour ${tech.fullName},\n\nVoici votre lien d'activation sécurisé pour recevoir vos ordres de travail OptiFibre sur Telegram :\n👉 ${link}\n\n1. Cliquez sur le lien\n2. Appuyez sur "DÉMARRER" ou tapez /start\nVotre compte sera instantanément synchronisé !`;

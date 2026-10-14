@@ -198,8 +198,14 @@ class AppStateStore {
         telegramLinkDisabled: t.telegramLinkDisabled ?? false,
       }));
 
+      if (localStorage.getItem('3gcom_cleaned_tickets_prod_v2') !== 'true') {
+        localStorage.removeItem(STORAGE_KEYS.TICKETS);
+        localStorage.removeItem(STORAGE_KEYS.EVENTS);
+        localStorage.setItem('3gcom_cleaned_tickets_prod_v2', 'true');
+      }
+
       const storedTickets = localStorage.getItem(STORAGE_KEYS.TICKETS);
-      let parsedTickets: Ticket[] = storedTickets ? JSON.parse(storedTickets) : this.enrichInitialTickets(INITIAL_TICKETS);
+      let parsedTickets: Ticket[] = storedTickets ? JSON.parse(storedTickets) : [];
       
       // Refresh SLA for all loaded tickets
       this.tickets = parsedTickets.map(t => {
@@ -213,7 +219,7 @@ class AppStateStore {
       });
 
       const storedEvents = localStorage.getItem(STORAGE_KEYS.EVENTS);
-      this.events = storedEvents ? JSON.parse(storedEvents) : INITIAL_EVENTS;
+      this.events = storedEvents ? JSON.parse(storedEvents) : [];
 
       const storedToken = localStorage.getItem(STORAGE_KEYS.TELEGRAM_TOKEN);
       this.telegramToken = storedToken || '';
@@ -523,6 +529,12 @@ class AppStateStore {
       return enriched.filter(t => t.sectorId === user.sectorId);
     }
     return enriched;
+  }
+
+  public clearAllTickets() {
+    this.tickets = [];
+    this.events = [];
+    this.persist();
   }
 
   public getTicketById(ticketId: string, requestingUser?: User | null): Ticket | null {

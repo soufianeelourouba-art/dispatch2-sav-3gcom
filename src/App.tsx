@@ -13,6 +13,7 @@ import { TechniciensView } from './components/manager/TechniciensView';
 import { TelegramSimulatorDrawer } from './components/telegram/TelegramSimulatorDrawer';
 import { TicketHistoryModal } from './components/TicketHistoryModal';
 import { LoginView } from './components/auth/LoginView';
+import { TechnicianMobilePortal } from './components/technician/TechnicianMobilePortal';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(store.getCurrentUser());
@@ -46,6 +47,24 @@ export default function App() {
     store.logout();
     setCurrentUser(null);
   };
+
+  // Check URL query parameters for mobile technician portal (?tech=... or ?act=...)
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const techParam = urlParams?.get('tech');
+  const actParam = urlParams?.get('act') || urlParams?.get('start');
+
+  if (techParam || actParam) {
+    return (
+      <TechnicianMobilePortal
+        technicianId={techParam || undefined}
+        activationToken={actParam || undefined}
+        onExitPortal={() => {
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setVersion(v => v + 1);
+        }}
+      />
+    );
+  }
 
   // If user is not logged in, display the secure LoginView
   if (!currentUser) {

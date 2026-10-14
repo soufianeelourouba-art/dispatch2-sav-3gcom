@@ -23,7 +23,8 @@ import {
   Eye, 
   ExternalLink,
   ShieldAlert,
-  Phone
+  Phone,
+  Trash2
 } from 'lucide-react';
 
 interface ManagerDashboardViewProps {
@@ -180,6 +181,12 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
     exportTechnicianMatrixToExcel(scopedTechs, scopedTickets, `matrice_techniciens_${selectedSector ? selectedSector.code.toLowerCase() : 'national'}.xlsx`);
   };
 
+  const handleClearAllTickets = () => {
+    if (window.confirm(`⚠️ Confirmer la suppression de TOUS les tickets (${allTickets.length} tickets actuellement en base) ?\n\nCette action remettra la base à zéro pour vous permettre d'importer vos propres fichiers réels. Le référentiel (secteurs, zones, techniciens) sera conservé.`)) {
+      store.clearAllTickets();
+    }
+  };
+
   return (
     <div className="space-y-6">
       
@@ -202,10 +209,19 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button
+            onClick={handleClearAllTickets}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl hover:bg-rose-100 transition-colors shadow-xs cursor-pointer"
+            title="Vider tous les tickets pour repartir sur une base propre"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+            <span>Purger tickets ({allTickets.length})</span>
+          </button>
+
           <button
             onClick={handleExportTechs}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors shadow-xs"
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors shadow-xs cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span>Matrice Techniciens</span>
@@ -213,7 +229,7 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
           
           <button
             onClick={handleExportAll}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors shadow-xs"
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors shadow-xs cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export Excel (.xlsx)</span>

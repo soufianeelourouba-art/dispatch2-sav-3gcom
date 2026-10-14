@@ -130,15 +130,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleQuickLogin = (targetUser: User) => {
-    setUsername(targetUser.username);
-    setPassword(targetUser.password || '123456');
-    const result = store.login(targetUser.username, targetUser.password || '123456');
-    if (result.success && result.user) {
-      onLoginSuccess(result.user);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       
@@ -410,45 +401,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 </button>
               </div>
             </form>
-          )}
-
-          {/* Quick Demo Access Bar */}
-          {mode === 'LOGIN' && (
-            <div className="mt-6 pt-5 border-t border-slate-100">
-              <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>Comptes pré-configurés pour test :</span>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2">
-                {allUsers.slice(0, 3).map(u => {
-                  const sec = sectors.find(s => s.id === u.sectorId);
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => handleQuickLogin(u)}
-                      className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100/80 text-left transition-colors flex items-center justify-between text-xs group cursor-pointer"
-                    >
-                      <div>
-                        <div className="font-bold text-slate-900 group-hover:text-slate-950 flex items-center gap-1.5">
-                          <span>{u.name}</span>
-                          <span className="text-[10px] font-mono text-slate-500 bg-slate-200/80 px-1.5 py-0.2 rounded">
-                            {u.username}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          {u.role === 'MANAGER' ? 'Vue Consolidée Royaume' : `Secteur ${sec?.name || 'Assigned'}`}
-                        </div>
-                      </div>
-                      <span className="text-[11px] font-semibold text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded-lg shadow-2xs group-hover:border-slate-400">
-                        Entrer →
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           )}
 
         </div>

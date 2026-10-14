@@ -53,13 +53,21 @@ export const TelegramLinkModal: React.FC<TelegramLinkModalProps> = ({ technician
   const isSuspended = currentTech.telegramLinkDisabled || currentTech.telegramActivationStatus === 'REVOKED';
 
   const activationLink = telegramBotService.getActivationLink(currentTech);
+  const directMobileLink = telegramBotService.getDirectMobilePortalLink(currentTech);
   const whatsAppUrl = telegramBotService.getWhatsAppShareUrl(currentTech);
   const smsUrl = telegramBotService.getSmsShareUrl(currentTech);
+  const [copiedMobile, setCopiedMobile] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(activationLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleCopyMobile = () => {
+    navigator.clipboard.writeText(directMobileLink);
+    setCopiedMobile(true);
+    setTimeout(() => setCopiedMobile(false), 2500);
   };
 
   const handleReset = () => {
@@ -215,27 +223,67 @@ export const TelegramLinkModal: React.FC<TelegramLinkModalProps> = ({ technician
             </div>
           )}
 
-          {/* Activation Link & 1-Click Send Section */}
-          <div className="space-y-2">
-            <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
-              Lien direct d'activation Telegram :
+          {/* Direct Mobile Web Portal Link (No App required) */}
+          <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold text-slate-800 uppercase tracking-wider block">
+                1. Lien Mobile Technicien (Sans installation) :
+              </label>
+              <a
+                href={directMobileLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-sky-600 hover:underline font-semibold flex items-center gap-1"
+              >
+                <span>Tester sur smartphone</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                readOnly
+                value={directMobileLink}
+                className="w-full font-mono text-[11px] bg-white border border-slate-300 rounded-xl p-2 text-slate-800 select-all"
+              />
+              <button
+                type="button"
+                onClick={handleCopyMobile}
+                className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl font-bold flex items-center gap-1 shrink-0 text-xs transition-colors cursor-pointer"
+              >
+                {copiedMobile ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedMobile ? 'Copié !' : 'Copier'}</span>
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-500">
+              Le technicien ouvre ce lien sur son smartphone pour consulter ses interventions et valider ses retours NF / Litige.
+            </p>
+          </div>
+
+          {/* Telegram Activation Link */}
+          <div className="space-y-1.5 p-3 rounded-xl bg-sky-50/50 border border-sky-200">
+            <label className="text-[11px] font-bold text-sky-900 uppercase tracking-wider block">
+              2. Lien d'Activation Bot Telegram :
             </label>
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 readOnly
                 value={activationLink}
-                className="w-full font-mono text-[11px] bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-800 select-all"
+                className="w-full font-mono text-[11px] bg-white border border-sky-300 rounded-xl p-2 text-slate-800 select-all"
               />
               <button
+                type="button"
                 onClick={handleCopy}
-                className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold flex items-center gap-1.5 shrink-0 transition-colors border border-slate-200"
-                title="Copier le lien d'activation"
+                className="px-3 py-2 bg-sky-100 hover:bg-sky-200 text-sky-800 rounded-xl font-bold flex items-center gap-1 shrink-0 text-xs transition-colors cursor-pointer"
               >
-                {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'Copié !' : 'Copier'}</span>
               </button>
             </div>
+            <p className="text-[10px] text-sky-700">
+              Pour recevoir les notifications instantanées directement dans l'application Telegram.
+            </p>
           </div>
 
           {/* Action Buttons: 1-Click Dispatch */}
