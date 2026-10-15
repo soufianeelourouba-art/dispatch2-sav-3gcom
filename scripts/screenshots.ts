@@ -94,6 +94,12 @@ try {
         await page.waitForTimeout(500);
         await page.screenshot({ path: join(outDir, `3-creer-ticket-${device}.png`) });
         await page.getByRole('button', { name: 'Annuler' }).click();
+
+        // Import preview of the sample file (never confirmed)
+        await page.getByRole('navigation').filter({ visible: true }).getByRole('button', { name: 'Importer Excel', exact: true }).click();
+        await page.getByRole('button', { name: /Charger un fichier type/ }).click();
+        await page.waitForTimeout(800);
+        await page.screenshot({ path: join(outDir, `3-import-apercu-${device}.png`), fullPage: device === 'desktop' });
       }
       await context.close();
     }

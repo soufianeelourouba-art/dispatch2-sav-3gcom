@@ -143,6 +143,65 @@ describe('resolveZone', () => {
   });
 });
 
+describe('resolveZone — fautes de frappe', () => {
+  const zonesWithTwins: TechnicalZone[] = [
+    ...zones,
+    { id: 'z-cal', sectorId: 'sec-casa', label: 'Californie', msanCode: 'MSAN-CAL', createdAt: '' },
+    { id: 'z-sm1', sectorId: 'sec-casa', label: 'Sidi Moumen 1', msanCode: 'MSAN-SM1', createdAt: '' },
+    { id: 'z-sm2', sectorId: 'sec-casa', label: 'Sidi Moumen 2', msanCode: 'MSAN-SM2', createdAt: '' },
+    { id: 'z-oasis', sectorId: 'sec-casa', label: 'Oasis', msanCode: 'MSAN-OAS', createdAt: '' },
+    { id: 'z-oasys', sectorId: 'sec-casa', label: 'Oasys Park', msanCode: 'MSAN-OPK', createdAt: '' },
+  ];
+  const c: ImportContext = { ...ctx, zones: zonesWithTwins };
+
+  it('ignore accents, majuscules, tirets et espaces (sans parler de correction)', () => {
+    expect(resolveZone('MAÂRIF-CENTRE', c)).toEqual({ zoneId: 'z-maarif', zoneLabel: 'Maarif Centre' });
+    expect(resolveZone('maarifcentre', c).zoneId).toBe('z-maarif');
+    expect(resolveZone('msan maa', c).zoneId).toBe('z-maarif');
+  });
+
+  it('corrige une lettre en trop, en moins ou remplacée, et le signale', () => {
+    expect(resolveZone('Califarnie', c)).toEqual({ zoneId: 'z-cal', zoneLabel: 'Californie', correctedFrom: 'Califarnie' });
+    expect(resolveZone('Californi', c).zoneId).toBe('z-cal');
+    expect(resolveZone('Callifornie', c).zoneId).toBe('z-cal');
+    expect(resolveZone('Maarif Cnetre', c).zoneId).toBe('z-maarif'); // 2 fautes sur un nom long
+  });
+
+  it('ne change jamais un numéro de zone', () => {
+    expect(resolveZone('Sidi Moumen 3', c)).toEqual({});
+    expect(resolveZone('Sidi Moumin 2', c).zoneId).toBe('z-sm2');
+  });
+
+  it('corrige vers la zone la plus proche quand elle est seule à cette distance', () => {
+    expect(resolveZone('Oasys', c).zoneId).toBe('z-oasis');
+  });
+
+  it('ne corrige pas les noms courts', () => {
+    const withAnfa: ImportContext = { ...c, zones: [...zonesWithTwins, { id: 'z-anfa', sectorId: 'sec-casa', label: 'Anfa', msanCode: 'AN', createdAt: '' }] };
+    expect(resolveZone('Anfo', withAnfa)).toEqual({});
+  });
+
+  it('ne corrige pas quand deux zones sont aussi proches l\'une que l\'autre', () => {
+    const twins: ImportContext = {
+      ...c,
+      zones: [
+        { id: 'z-nahda', sectorId: 'sec-casa', label: 'Hay Nahda', msanCode: 'X1A', createdAt: '' },
+        { id: 'z-nahla', sectorId: 'sec-casa', label: 'Hay Nahla', msanCode: 'X1B', createdAt: '' },
+      ],
+    };
+    expect(resolveZone('Hay Nahfa', twins)).toEqual({});
+    expect(resolveZone('Hay Nahdda', twins).zoneId).toBe('z-nahda');
+  });
+
+  it('ne corrige pas un texte trop différent', () => {
+    expect(resolveZone('Casablanca Port', c)).toEqual({});
+  });
+
+  it('une zone d\'un autre secteur reste refusée, même avec des accents', () => {
+    expect(resolveZone('AGDAL', c)).toEqual({ crossSectorName: 'Rabat' });
+  });
+});
+
 describe('interpretRows', () => {
   const detected = detectHeaders(['N° Réclamation', 'Code Client', 'Nom Abonné', 'Téléphone', 'Zone MSAN', 'Date']);
   const row = (overrides: Record<string, unknown> = {}) => ({

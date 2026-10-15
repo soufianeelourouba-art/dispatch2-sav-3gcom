@@ -38,6 +38,7 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
   const [fileName, setFileName] = useState<string | null>(null);
   const [detectedColumns, setDetectedColumns] = useState<DetectedColumns | null>(null);
   const [previewRows, setPreviewRows] = useState<InterpretedRow[]>([]);
+  const [previewFilter, setPreviewFilter] = useState<'ALL' | 'REJECTED' | 'UNKNOWN_ZONE' | 'CORRECTED' | 'SPLITTER'>('ALL');
   const [totalRows, setTotalRows] = useState<number>(0);
   const [executeFn, setExecuteFn] = useState<(() => ImportReport) | null>(null);
   const [report, setReport] = useState<ImportReport | null>(null);
@@ -58,12 +59,31 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
       setFileName(name);
       setDetectedColumns(parsed.detectedColumns);
       setPreviewRows(parsed.previewRows);
+      setPreviewFilter('ALL');
       setTotalRows(parsed.totalRawRows);
       setExecuteFn(() => parsed.executeImport);
     } catch (err: any) {
       setErrorMsg(err.message || 'Erreur lors du traitement du fichier Excel.');
     }
   };
+
+  // Preview summary and filters
+  const previewStats = {
+    total: previewRows.length,
+    valid: previewRows.filter(r => r.isValid).length,
+    rejected: previewRows.filter(r => !r.isValid).length,
+    unknownZone: previewRows.filter(r => r.isValid && !r.resolvedZoneId).length,
+    corrected: previewRows.filter(r => r.zoneCorrectedFrom).length,
+    splitter: previewRows.filter(r => r.splitterRef).length,
+    splitterGroups: new Set(previewRows.filter(r => r.splitterRef).map(r => r.splitterRef)).size,
+  };
+  const filteredPreviewRows = previewRows.filter(r =>
+    previewFilter === 'REJECTED' ? !r.isValid :
+    previewFilter === 'UNKNOWN_ZONE' ? r.isValid && !r.resolvedZoneId :
+    previewFilter === 'CORRECTED' ? !!r.zoneCorrectedFrom :
+    previewFilter === 'SPLITTER' ? !!r.splitterRef :
+    true
+  );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -303,7 +323,7 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
                 Aperçu des lignes détectées pour « {currentSectorObj?.name} »
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Vérifiez la concordance des zones avec les techniciens du secteur avant validation finale. Total lignes : {totalRows}.
+                Vérifiez toutes les lignes avant validation : cliquez sur un chiffre pour n'afficher que ces lignes. Total : {totalRows} ligne(s).
               </p>
             </div>
 
@@ -342,9 +362,40 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
             </div>
           )}
 
-          <div className="overflow-x-auto border border-slate-200 rounded-xl">
+          {/* Summary: click a figure to show only those rows */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+            {([
+              ['ALL', 'Lignes du fichier', previewStats.total, 'text-slate-900', 'border-slate-300'],
+              ['ALL', 'Prêtes à intégrer', previewStats.valid, 'text-emerald-700', 'border-emerald-300'],
+              ['REJECTED', 'Rejetées', previewStats.rejected, 'text-rose-700', 'border-rose-300'],
+              ['UNKNOWN_ZONE', 'Zone inconnue (à rattacher)', previewStats.unknownZone, 'text-amber-700', 'border-amber-300'],
+              ['CORRECTED', 'Zone corrigée (faute de frappe)', previewStats.corrected, 'text-sky-700', 'border-sky-300'],
+              ['SPLITTER', `Avec splitter (${previewStats.splitterGroups} splitters)`, previewStats.splitter, 'text-brand-orange-600', 'border-brand-orange-400'],
+            ] as const).map(([filter, label, value, color, border], i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setPreviewFilter(filter)}
+                className={`text-left p-3 rounded-xl border bg-white hover:bg-slate-50 transition-colors ${
+                  previewFilter === filter && (filter !== 'ALL' || i === 0) ? `${border} ring-2 ring-slate-200` : 'border-slate-200'
+                }`}
+              >
+                <span className={`block text-xl font-bold font-mono ${color}`}>{value}</span>
+                <span className="text-[11px] text-slate-600">{label}</span>
+              </button>
+            ))}
+          </div>
+
+          {previewFilter !== 'ALL' && (
+            <div className="text-xs text-slate-600">
+              Affichage : {filteredPreviewRows.length} ligne(s) filtrée(s) ·{' '}
+              <button onClick={() => setPreviewFilter('ALL')} className="font-bold text-brand-navy-700 hover:underline">voir toutes les lignes</button>
+            </div>
+          )}
+
+          <div className="overflow-auto max-h-[65vh] border border-slate-200 rounded-xl">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-[11px]">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-[11px] sticky top-0 z-10">
                 <tr>
                   <th className="py-3 px-3">Ligne</th>
                   <th className="py-3 px-3">N° Réclamation</th>
@@ -358,7 +409,7 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {previewRows.map(row => (
+                {filteredPreviewRows.map(row => (
                   <tr key={row.rowNumber} className={!row.isValid ? 'bg-rose-50/50' : 'hover:bg-slate-50/60'}>
                     <td className="py-2.5 px-3 font-mono text-slate-500">#{row.rowNumber}</td>
                     <td className="py-2.5 px-3 font-bold font-mono text-slate-900">{row.ticketNumber || '—'}</td>
@@ -366,7 +417,16 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
                     <td className="py-2.5 px-3 font-mono text-slate-600">{row.clientPhone || '—'}</td>
                     <td className="py-2.5 px-3 font-mono text-slate-700 font-semibold">{row.rawZoneText}</td>
                     <td className="py-2.5 px-3">
-                      {row.resolvedZoneLabel ? (
+                      {row.resolvedZoneLabel && row.zoneCorrectedFrom ? (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-50 text-sky-800 text-[11px] font-bold border border-sky-200"
+                          title={`Corrigé automatiquement depuis « ${row.zoneCorrectedFrom} »`}
+                        >
+                          <CheckCircle2 className="w-3 h-3 text-sky-600" />
+                          <span>{row.resolvedZoneLabel}</span>
+                          <span className="font-normal">(corrigé)</span>
+                        </span>
+                      ) : row.resolvedZoneLabel ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                           <span>{row.resolvedZoneLabel}</span>

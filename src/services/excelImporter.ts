@@ -40,7 +40,8 @@ export function parseExcelBuffer(
     aliases: store.getZoneAliases(),
   });
 
-  const previewRows = interpretedRows.slice(0, 10);
+  // Every row is shown before import: the orienteur must be able to check the whole file
+  const previewRows = interpretedRows;
 
   // Function to execute the real import into storage
   const executeImport = (): ImportReport => {

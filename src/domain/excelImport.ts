@@ -178,6 +178,8 @@ export interface InterpretedRow {
   splitterRef?: string;
   resolvedZoneId?: string;
   resolvedZoneLabel?: string;
+  // Zone text as written in the file when it was matched despite a typo
+  zoneCorrectedFrom?: string;
   resolvedSectorId?: string;
   resolvedSectorName?: string;
   registeredAt: string;
@@ -189,20 +191,62 @@ interface ZoneResolution {
   zoneId?: string;
   zoneLabel?: string;
   crossSectorName?: string;
+  // Set when the zone was recognised despite a typo ("Califarnie" → "Californie")
+  correctedFrom?: string;
 }
+
+// "Maârif-Centre " → "MAARIF CENTRE": accents, case, punctuation and spacing are ignored.
+export function normalizeZoneText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim();
+}
+
+const compact = (normalized: string) => normalized.replace(/ /g, '');
+
+// Edit distance (insertions, deletions, substitutions), stopping early above `max`.
+export function editDistance(a: string, b: string, max = Infinity): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost);
+      rowMin = Math.min(rowMin, current[j]);
+    }
+    if (rowMin > max) return max + 1;
+    previous = current;
+  }
+  return previous[b.length];
+}
+
+// Typos tolerated: none under 5 letters, 1 up to 9, 2 from 10.
+function typoBudget(length: number): number {
+  return length < 5 ? 0 : length < 10 ? 1 : 2;
+}
+
+const digitsOf = (text: string) => text.replace(/\D/g, '');
 
 export function resolveZone(raw: string, ctx: ImportContext): ZoneResolution {
   if (!raw) return {};
-  const cleanRaw = raw.trim().toUpperCase();
-  const matches = (z: TechnicalZone) => z.label.toUpperCase() === cleanRaw || z.msanCode.toUpperCase() === cleanRaw;
+  const wanted = compact(normalizeZoneText(raw));
+  if (!wanted) return {};
+  const keysOf = (z: TechnicalZone) => [z.label, z.msanCode].map(v => compact(normalizeZoneText(v || ''))).filter(Boolean);
+  const matches = (z: TechnicalZone) => keysOf(z).includes(wanted);
   const sectorName = (sectorId?: string) => ctx.sectors.find(s => s.id === sectorId)?.name || 'Autre secteur';
+  const sectorZones = ctx.zones.filter(z => z.sectorId === ctx.targetSectorId);
 
   // 1. Zone label or MSAN code of the selected sector
-  const direct = ctx.zones.find(z => z.sectorId === ctx.targetSectorId && matches(z));
+  const direct = sectorZones.find(matches);
   if (direct) return { zoneId: direct.id, zoneLabel: direct.label };
 
   // 2. Known alias
-  const alias = ctx.aliases.find(a => a.rawLabel.trim().toUpperCase() === cleanRaw);
+  const alias = ctx.aliases.find(a => compact(normalizeZoneText(a.rawLabel)) === wanted);
   const aliasZone = alias ? ctx.zones.find(z => z.id === alias.technicalZoneId) : undefined;
   if (aliasZone && aliasZone.sectorId === ctx.targetSectorId) {
     return { zoneId: aliasZone.id, zoneLabel: aliasZone.label };
@@ -212,6 +256,30 @@ export function resolveZone(raw: string, ctx: ImportContext): ZoneResolution {
   const other = ctx.zones.find(z => z.sectorId !== ctx.targetSectorId && matches(z));
   if (other) return { crossSectorName: sectorName(other.sectorId) };
   if (aliasZone) return { crossSectorName: sectorName(aliasZone.sectorId) };
+
+  // 4. Small typo on a zone of the selected sector. Only when exactly one zone is that close,
+  //    and never on numbers ("ZONE 1" must not become "ZONE 2").
+  const budget = typoBudget(wanted.length);
+  if (budget > 0) {
+    let best: { zone: TechnicalZone; distance: number } | null = null;
+    let ambiguous = false;
+    for (const zone of sectorZones) {
+      for (const key of keysOf(zone)) {
+        if (digitsOf(key) !== digitsOf(wanted)) continue;
+        const distance = editDistance(wanted, key, budget);
+        if (distance > budget) continue;
+        if (!best || distance < best.distance) {
+          best = { zone, distance };
+          ambiguous = false;
+        } else if (distance === best.distance && best.zone.id !== zone.id) {
+          ambiguous = true;
+        }
+      }
+    }
+    if (best && !ambiguous) {
+      return { zoneId: best.zone.id, zoneLabel: best.zone.label, correctedFrom: raw.trim() };
+    }
+  }
 
   return {};
 }
@@ -279,6 +347,7 @@ export function interpretRows(
       splitterRef,
       resolvedZoneId: zone.zoneId,
       resolvedZoneLabel: zone.zoneLabel,
+      zoneCorrectedFrom: zone.correctedFrom,
       resolvedSectorId: ctx.targetSectorId,
       resolvedSectorName: targetSectorName,
       registeredAt,
