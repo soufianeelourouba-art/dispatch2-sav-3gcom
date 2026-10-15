@@ -74,7 +74,10 @@ export const ReferentielView: React.FC = () => {
   // Sector Form & Edit Modal
   const [newSectorCode, setNewSectorCode] = useState('');
   const [newSectorName, setNewSectorName] = useState('');
-  const [newSectorDcId, setNewSectorDcId] = useState(() => dcs[0]?.id || '');
+  // The selects show their first option by default; when nothing was picked yet (or the
+  // list was still loading when the page opened), that first option is the selection.
+  const [newSectorDcId, setNewSectorDcId] = useState('');
+  const sectorDcId = dcs.some(d => d.id === newSectorDcId) ? newSectorDcId : dcs[0]?.id || '';
   const [newSectorDispatcherId, setNewSectorDispatcherId] = useState('');
   const [editingSector, setEditingSector] = useState<Sector | null>(null);
   const [editSectorCode, setEditSectorCode] = useState('');
@@ -83,7 +86,8 @@ export const ReferentielView: React.FC = () => {
   const [editSectorDispatcherId, setEditSectorDispatcherId] = useState('');
 
   // Zone Form & Edit Modal
-  const [newZoneSectorId, setNewZoneSectorId] = useState(() => sectors[0]?.id || '');
+  const [newZoneSectorId, setNewZoneSectorId] = useState('');
+  const zoneSectorId = sectors.some(sec => sec.id === newZoneSectorId) ? newZoneSectorId : sectors[0]?.id || '';
   const [newZoneLabel, setNewZoneLabel] = useState('');
   const [newZoneMsan, setNewZoneMsan] = useState('');
   const [newZoneDesc, setNewZoneDesc] = useState('');
@@ -173,12 +177,16 @@ export const ReferentielView: React.FC = () => {
   // --- Handlers: Sector ---
   const handleAddSector = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSectorCode.trim() || !newSectorName.trim() || !newSectorDcId) return;
+    if (!sectorDcId) {
+      alert("Créez d'abord une Direction Régionale (DC) dans l'onglet « Directions Régionales ».");
+      return;
+    }
+    if (!newSectorCode.trim() || !newSectorName.trim()) return;
 
     const assignedUser = allUsers.find(u => u.id === newSectorDispatcherId);
 
     const createdSector = store.addSector({
-      dcId: newSectorDcId,
+      dcId: sectorDcId,
       code: newSectorCode.trim().toUpperCase(),
       name: newSectorName.trim(),
       dispatcherId: newSectorDispatcherId || undefined,
@@ -255,12 +263,16 @@ export const ReferentielView: React.FC = () => {
   // --- Handlers: Zone ---
   const handleAddZone = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newZoneSectorId || !newZoneLabel.trim() || !newZoneMsan.trim()) return;
+    if (!zoneSectorId) {
+      alert("Créez d'abord un secteur dans l'onglet « Secteurs Géographiques ».");
+      return;
+    }
+    if (!newZoneLabel.trim() || !newZoneMsan.trim()) return;
 
-    const parentSector = sectors.find(s => s.id === newZoneSectorId);
+    const parentSector = sectors.find(s => s.id === zoneSectorId);
 
     store.addTechnicalZone({
-      sectorId: newZoneSectorId,
+      sectorId: zoneSectorId,
       dcId: parentSector?.dcId,
       label: newZoneLabel.trim(),
       msanCode: newZoneMsan.trim().toUpperCase(),
@@ -803,7 +815,7 @@ export const ReferentielView: React.FC = () => {
               <div>
                 <label className="text-[11px] font-semibold text-slate-700 block mb-1">Direction (DC) parente *</label>
                 <select
-                  value={newSectorDcId}
+                  value={sectorDcId}
                   onChange={e => setNewSectorDcId(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-semibold"
                   required
@@ -946,7 +958,7 @@ export const ReferentielView: React.FC = () => {
               <div>
                 <label className="text-[11px] font-semibold text-slate-700 block mb-1">Secteur géographique *</label>
                 <select
-                  value={newZoneSectorId}
+                  value={zoneSectorId}
                   onChange={e => setNewZoneSectorId(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900"
                   required

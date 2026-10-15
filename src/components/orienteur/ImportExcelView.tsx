@@ -27,9 +27,12 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
   onImportCompleted,
 }) => {
   const availableSectors = store.getSectors(currentUser);
-  const [selectedSectorId, setSelectedSectorId] = useState<string>(() => {
-    return currentUser.activeSectorId || (currentUser.sectorIds && currentUser.sectorIds[0]) || currentUser.sectorId || (availableSectors[0]?.id || '');
-  });
+  // Only an existing sector can be selected: the profile may still reference a deleted one,
+  // and the sector list may still be loading when the page opens.
+  const [pickedSectorId, setSelectedSectorId] = useState<string>('');
+  const selectedSectorId =
+    [pickedSectorId, currentUser.activeSectorId, ...(currentUser.sectorIds || []), currentUser.sectorId]
+      .find(id => id && availableSectors.some(s => s.id === id)) || availableSectors[0]?.id || '';
 
   const [fileName, setFileName] = useState<string | null>(null);
   const [detectedColumns, setDetectedColumns] = useState<DetectedColumns | null>(null);

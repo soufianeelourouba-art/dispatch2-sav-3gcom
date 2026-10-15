@@ -58,7 +58,9 @@ export const TechniciensView: React.FC<TechniciensViewProps> = ({ currentUser })
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newTelegram, setNewTelegram] = useState('');
-  const [newSectorId, setNewSectorId] = useState<string>(() => allowedSectors[0]?.id || '');
+  // Falls back to the first sector shown by the select (the list may load after the page opens)
+  const [pickedNewSectorId, setNewSectorId] = useState<string>('');
+  const newSectorId = allowedSectors.some(s => s.id === pickedNewSectorId) ? pickedNewSectorId : allowedSectors[0]?.id || '';
   const [newSelectedZones, setNewSelectedZones] = useState<string[]>([]);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
