@@ -75,9 +75,9 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
   };
 
   const handleLoadSampleFile = () => {
-    const sampleBytes = generateSampleExcelFile(selectedSectorId);
+    const sampleFile = generateSampleExcelFile(selectedSectorId);
     const secName = currentSectorObj ? currentSectorObj.name.replace(/[^a-zA-Z0-9]/g, '_') : 'Secteur';
-    handleProcessFileBuffer(sampleBytes.buffer as ArrayBuffer, `Tickets_SAV_${secName}_FichierType.xlsx`);
+    handleProcessFileBuffer(sampleFile, `Tickets_SAV_${secName}_FichierType.xlsx`);
   };
 
   const handleConfirmImport = () => {

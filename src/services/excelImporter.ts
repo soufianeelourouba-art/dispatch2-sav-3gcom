@@ -105,7 +105,8 @@ export function parseExcelBuffer(
 }
 
 // Generates a mock sample Excel workbook for immediate testing per sector
-export function generateSampleExcelFile(targetSectorId?: string): Uint8Array {
+// XLSX.write with type 'array' returns an ArrayBuffer (not a Uint8Array).
+export function generateSampleExcelFile(targetSectorId?: string): ArrayBuffer {
   const sectors = store.getSectors();
   const zones = store.getTechnicalZones();
 
