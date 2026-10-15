@@ -208,22 +208,35 @@ export function normalizeZoneText(text: string): string {
 const compact = (normalized: string) => normalized.replace(/ /g, '');
 
 // Edit distance (insertions, deletions, substitutions), stopping early above `max`.
+// Two swapped neighbouring letters ("Califronie") count as a single typo.
 export function editDistance(a: string, b: string, max = Infinity): number {
   if (Math.abs(a.length - b.length) > max) return max + 1;
+  let beforePrevious: number[] = [];
   let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
+  let previousMin = 0;
   for (let i = 1; i <= a.length; i++) {
     const current = [i];
     let rowMin = i;
     for (let j = 1; j <= b.length; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
       current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        current[j] = Math.min(current[j], beforePrevious[j - 2] + 1);
+      }
       rowMin = Math.min(rowMin, current[j]);
     }
-    if (rowMin > max) return max + 1;
+    // Later rows only build on the last two rows: stop once both exceed the budget
+    if (rowMin > max && previousMin > max) return max + 1;
+    beforePrevious = previous;
     previous = current;
+    previousMin = rowMin;
   }
   return previous[b.length];
 }
+
+// "VIOLLETE" / "VIOLETTE" → "VIOLETE": doubled letters are a very common typo. Digits are kept
+// as they are ("11" must stay different from "1").
+const collapseDoubledLetters = (text: string) => text.replace(/([A-Z])\1+/g, '$1');
 
 // Typos tolerated: none under 5 letters, 1 up to 9, 2 from 10.
 function typoBudget(length: number): number {
@@ -266,7 +279,10 @@ export function resolveZone(raw: string, ctx: ImportContext): ZoneResolution {
     for (const zone of sectorZones) {
       for (const key of keysOf(zone)) {
         if (digitsOf(key) !== digitsOf(wanted)) continue;
-        const distance = editDistance(wanted, key, budget);
+        const distance = Math.min(
+          editDistance(wanted, key, budget),
+          editDistance(collapseDoubledLetters(wanted), collapseDoubledLetters(key), budget)
+        );
         if (distance > budget) continue;
         if (!best || distance < best.distance) {
           best = { zone, distance };

@@ -13,7 +13,8 @@
     "deploy:rules": "firebase deploy --only firestore:rules",
     "test": "vitest run",
     "test:watch": "vitest",
-    "ci": "tsc --noEmit && vitest run && vite build"
+    "ci": "tsc --noEmit && vitest run && vite build",
+    "check:zones": "jiti scripts/check-zones.ts"
   },
   "dependencies": {
     "firebase": "^13.0.0",
@@ -29,6 +30,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "jiti": "^2.7.0",
     "playwright-core": "^1.64.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",

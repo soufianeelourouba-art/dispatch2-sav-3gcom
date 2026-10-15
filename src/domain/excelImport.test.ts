@@ -167,6 +167,27 @@ describe('resolveZone — fautes de frappe', () => {
     expect(resolveZone('Maarif Cnetre', c).zoneId).toBe('z-maarif'); // 2 fautes sur un nom long
   });
 
+  it('tolère les lettres doublées au mauvais endroit (« VIOLLETE ») et les lettres inversées', () => {
+    const real: ImportContext = {
+      ...c,
+      zones: [
+        ...zonesWithTwins,
+        { id: 'z-vio', sectorId: 'sec-casa', label: 'Violette', msanCode: 'VIOLETTE', createdAt: '' },
+      ],
+    };
+    expect(resolveZone('VIOLLETE', real)).toEqual({ zoneId: 'z-vio', zoneLabel: 'Violette', correctedFrom: 'VIOLLETE' });
+    expect(resolveZone('violete', real).zoneId).toBe('z-vio');
+    expect(resolveZone('Califronie', real).zoneId).toBe('z-cal');
+  });
+
+  it('les chiffres doublés ne sont jamais fusionnés', () => {
+    const numbered: ImportContext = {
+      ...c,
+      zones: [{ id: 'z-11', sectorId: 'sec-casa', label: 'Secteur Nord 11', msanCode: 'SN11', createdAt: '' }],
+    };
+    expect(resolveZone('Secteur Nord 1', numbered)).toEqual({});
+  });
+
   it('ne change jamais un numéro de zone', () => {
     expect(resolveZone('Sidi Moumen 3', c)).toEqual({});
     expect(resolveZone('Sidi Moumin 2', c).zoneId).toBe('z-sm2');
