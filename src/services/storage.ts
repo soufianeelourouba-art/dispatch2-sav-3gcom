@@ -176,40 +176,93 @@ class AppStateStore {
     this.initFirestoreSync();
   }
 
+  // Helper for non-destructive data merging by ID
+  private mergeLists<T extends { id: string }>(baselineList: T[], incomingList: T[]): T[] {
+    const map = new Map<string, T>();
+    baselineList.forEach(item => map.set(item.id, item));
+    incomingList.forEach(item => {
+      const existing = map.get(item.id);
+      map.set(item.id, existing ? { ...existing, ...item } : item);
+    });
+    return Array.from(map.values());
+  }
+
+  // Lossless multi-generation key aggregator: scans current and all legacy keys so data is NEVER lost
+  private loadAndUnionAllKeys<T extends { id: string }>(keys: string[], baseline: T[]): T[] {
+    const map = new Map<string, T>();
+    // 1. Initial defaults first
+    baseline.forEach(item => map.set(item.id, item));
+
+    // 2. Read through legacy and newer keys in chronological order (oldest to newest)
+    const reversedKeys = [...keys].reverse();
+    for (const key of reversedKeys) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((item: T) => {
+              if (item && item.id) {
+                const existing = map.get(item.id);
+                map.set(item.id, existing ? { ...existing, ...item } : item);
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.warn(`[3GCOM Storage] Parsing notice for key ${key}:`, err);
+      }
+    }
+    return Array.from(map.values());
+  }
+
   private loadInitialData() {
     try {
-      const storedDcs = localStorage.getItem(STORAGE_KEYS.DCS);
-      this.dcs = storedDcs ? JSON.parse(storedDcs) : INITIAL_DCS;
+      // 1. DCs
+      this.dcs = this.loadAndUnionAllKeys(['3gcom_dcs_v3', '3gcom_dcs_v2', '3gcom_dcs', 'dcs'], INITIAL_DCS);
 
-      const storedUsers = localStorage.getItem(STORAGE_KEYS.USERS);
-      this.users = storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS;
+      // 2. Users
+      this.users = this.loadAndUnionAllKeys(['3gcom_users_v3', '3gcom_users_v2', '3gcom_users', 'users'], INITIAL_USERS);
 
-      const storedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+      const storedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER) || localStorage.getItem('3gcom_current_user');
       this.currentUser = storedUser ? JSON.parse(storedUser) : null;
 
-      const storedSectors = localStorage.getItem(STORAGE_KEYS.SECTORS);
-      this.sectors = storedSectors ? JSON.parse(storedSectors) : INITIAL_SECTORS;
+      // 3. Sectors (Checking v3, v2, v1, and unversioned to restore ANY added sector)
+      const mergedSectors = this.loadAndUnionAllKeys(['3gcom_sectors_v3', '3gcom_sectors_v2', '3gcom_sectors', 'sectors'], INITIAL_SECTORS);
+      // Ensure all sectors have a dcId
+      const defaultDcId = this.dcs[0]?.id || 'dc-casa';
+      this.sectors = mergedSectors.map(s => ({
+        ...s,
+        dcId: s.dcId || defaultDcId,
+        dispatcherIds: s.dispatcherIds || (s.dispatcherId ? [s.dispatcherId] : []),
+      }));
 
-      const storedZones = localStorage.getItem(STORAGE_KEYS.ZONES);
-      this.zones = storedZones ? JSON.parse(storedZones) : INITIAL_TECHNICAL_ZONES;
+      // 4. Technical Zones
+      const mergedZones = this.loadAndUnionAllKeys(['3gcom_zones_v3', '3gcom_zones_v2', '3gcom_zones', 'zones'], INITIAL_TECHNICAL_ZONES);
+      const defaultSecId = this.sectors[0]?.id || 'sec-cas-nord';
+      this.zones = mergedZones.map(z => ({
+        ...z,
+        sectorId: z.sectorId || defaultSecId,
+      }));
 
-      const storedAliases = localStorage.getItem(STORAGE_KEYS.ZONE_ALIASES);
-      this.zoneAliases = storedAliases ? JSON.parse(storedAliases) : INITIAL_ZONE_ALIASES;
+      // 5. Aliases
+      this.zoneAliases = this.loadAndUnionAllKeys(['3gcom_zone_aliases_v3', '3gcom_zone_aliases_v2', '3gcom_zone_aliases', 'zone_aliases'], INITIAL_ZONE_ALIASES);
 
-      const storedTechs = localStorage.getItem(STORAGE_KEYS.TECHNICIANS);
-      const rawTechs: Technician[] = storedTechs ? JSON.parse(storedTechs) : INITIAL_TECHNICIANS;
-      this.technicians = rawTechs.map(t => ({
+      // 6. Technicians
+      const mergedTechs = this.loadAndUnionAllKeys(['3gcom_technicians_v3', '3gcom_technicians_v2', '3gcom_technicians', 'technicians'], INITIAL_TECHNICIANS);
+      this.technicians = mergedTechs.map(t => ({
         ...t,
+        sectorId: t.sectorId || defaultSecId,
+        sectorIds: t.sectorIds && t.sectorIds.length > 0 ? t.sectorIds : [t.sectorId || defaultSecId],
+        zoneIds: t.zoneIds && t.zoneIds.length > 0 ? t.zoneIds : ((t as any).technicalZoneIds || ((t as any).technicalZoneId ? [(t as any).technicalZoneId] : [])),
         telegramActivationToken: t.telegramActivationToken || `act_${t.id.replace(/[^a-zA-Z0-9]/g, '')}_${t.phone ? t.phone.replace(/[^0-9]/g, '').slice(-4) : '0000'}`,
         telegramActivationStatus: t.telegramActivationStatus || (t.telegramChatId ? 'ACTIVATED' : 'PENDING'),
         telegramLinkDisabled: t.telegramLinkDisabled ?? false,
       }));
 
-      const storedTickets = localStorage.getItem(STORAGE_KEYS.TICKETS);
-      let parsedTickets: Ticket[] = storedTickets ? JSON.parse(storedTickets) : [];
-      
-      // Refresh SLA for all loaded tickets
-      this.tickets = parsedTickets.map(t => {
+      // 7. Tickets
+      const storedTickets = this.loadAndUnionAllKeys(['3gcom_tickets_v3', '3gcom_tickets_v2', '3gcom_tickets', 'tickets'], INITIAL_TICKETS);
+      this.tickets = storedTickets.map(t => {
         const sla = computeTicketSLA(t.registeredAt);
         return {
           ...t,
@@ -219,13 +272,13 @@ class AppStateStore {
         };
       });
 
-      const storedEvents = localStorage.getItem(STORAGE_KEYS.EVENTS);
-      this.events = storedEvents ? JSON.parse(storedEvents) : [];
+      // 8. Events
+      this.events = this.loadAndUnionAllKeys(['3gcom_events_v3', '3gcom_events_v2', '3gcom_events', 'events'], INITIAL_EVENTS);
 
-      const storedToken = localStorage.getItem(STORAGE_KEYS.TELEGRAM_TOKEN);
+      const storedToken = localStorage.getItem(STORAGE_KEYS.TELEGRAM_TOKEN) || localStorage.getItem('3gcom_telegram_token');
       this.telegramToken = storedToken || '';
     } catch (e) {
-      console.warn('LocalStorage reset to defaults', e);
+      console.warn('LocalStorage recovery notice', e);
       this.dcs = INITIAL_DCS;
       this.users = INITIAL_USERS;
       this.currentUser = null;
@@ -261,141 +314,134 @@ class AppStateStore {
     });
   }
 
-  // --- Real-time Cloud Firestore Synchronization ---
+  // --- Real-time Cloud Firestore Synchronization (Non-destructive Merging) ---
   private initFirestoreSync() {
     try {
       testFirestoreConnection();
 
       // 1. Listen for tickets in real time
       onSnapshot(collection(db, 'tickets'), snapshot => {
-        if (!snapshot.empty) {
-          const remoteTickets: Ticket[] = [];
-          snapshot.forEach(docSnap => {
-            remoteTickets.push(docSnap.data() as Ticket);
-          });
-          if (remoteTickets.length > 0) {
-            this.tickets = remoteTickets;
-            localStorage.setItem(STORAGE_KEYS.TICKETS, JSON.stringify(this.tickets));
-            this.notify();
+        const remoteTickets: Ticket[] = [];
+        snapshot.forEach(docSnap => {
+          remoteTickets.push(docSnap.data() as Ticket);
+        });
+        this.tickets = this.mergeLists(this.tickets, remoteTickets);
+        localStorage.setItem(STORAGE_KEYS.TICKETS, JSON.stringify(this.tickets));
+        // Push any local tickets missing in remote
+        this.tickets.forEach(t => {
+          if (!remoteTickets.some(r => r.id === t.id)) {
+            this.syncDocToFirestore('tickets', t.id, t);
           }
-        } else if (this.tickets.length > 0) {
-          // Seed initial tickets to Firestore
-          this.tickets.forEach(t => this.syncDocToFirestore('tickets', t.id, t));
-        }
+        });
+        this.notify();
       }, err => {
         console.warn('Firestore tickets sync notice:', err.message);
       });
 
       // 2. Listen for events in real time
       onSnapshot(collection(db, 'events'), snapshot => {
-        if (!snapshot.empty) {
-          const remoteEvents: TicketEvent[] = [];
-          snapshot.forEach(docSnap => {
-            remoteEvents.push(docSnap.data() as TicketEvent);
-          });
-          if (remoteEvents.length > 0) {
-            this.events = remoteEvents;
-            localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(this.events));
-            this.notify();
+        const remoteEvents: TicketEvent[] = [];
+        snapshot.forEach(docSnap => {
+          remoteEvents.push(docSnap.data() as TicketEvent);
+        });
+        this.events = this.mergeLists(this.events, remoteEvents);
+        localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(this.events));
+        this.events.forEach(e => {
+          if (!remoteEvents.some(r => r.id === e.id)) {
+            this.syncDocToFirestore('events', e.id, e);
           }
-        } else if (this.events.length > 0) {
-          this.events.forEach(e => this.syncDocToFirestore('events', e.id, e));
-        }
+        });
+        this.notify();
       }, err => {
         console.warn('Firestore events sync notice:', err.message);
       });
 
       // 3. Listen for technicians in real time
       onSnapshot(collection(db, 'technicians'), snapshot => {
-        if (!snapshot.empty) {
-          const remoteTechs: Technician[] = [];
-          snapshot.forEach(docSnap => {
-            remoteTechs.push(docSnap.data() as Technician);
-          });
-          if (remoteTechs.length > 0) {
-            this.technicians = remoteTechs;
-            localStorage.setItem(STORAGE_KEYS.TECHNICIANS, JSON.stringify(this.technicians));
-            this.notify();
+        const remoteTechs: Technician[] = [];
+        snapshot.forEach(docSnap => {
+          remoteTechs.push(docSnap.data() as Technician);
+        });
+        this.technicians = this.mergeLists(this.technicians, remoteTechs);
+        localStorage.setItem(STORAGE_KEYS.TECHNICIANS, JSON.stringify(this.technicians));
+        this.technicians.forEach(t => {
+          if (!remoteTechs.some(r => r.id === t.id)) {
+            this.syncDocToFirestore('technicians', t.id, t);
           }
-        } else if (this.technicians.length > 0) {
-          this.technicians.forEach(t => this.syncDocToFirestore('technicians', t.id, t));
-        }
+        });
+        this.notify();
       }, err => {
         console.warn('Firestore technicians sync notice:', err.message);
       });
 
       // 4. Listen for users in real time (Orienteurs & Managers)
       onSnapshot(collection(db, 'users'), snapshot => {
-        if (!snapshot.empty) {
-          const remoteUsers: User[] = [];
-          snapshot.forEach(docSnap => {
-            remoteUsers.push(docSnap.data() as User);
-          });
-          if (remoteUsers.length > 0) {
-            this.users = remoteUsers;
-            localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(this.users));
-            this.notify();
+        const remoteUsers: User[] = [];
+        snapshot.forEach(docSnap => {
+          remoteUsers.push(docSnap.data() as User);
+        });
+        this.users = this.mergeLists(this.users, remoteUsers);
+        localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(this.users));
+        this.users.forEach(u => {
+          if (!remoteUsers.some(r => r.id === u.id)) {
+            this.syncDocToFirestore('users', u.id, u);
           }
-        } else if (this.users.length > 0) {
-          this.users.forEach(u => this.syncDocToFirestore('users', u.id, u));
-        }
+        });
+        this.notify();
       }, err => {
         console.warn('Firestore users sync notice:', err.message);
       });
 
       // 4b. Listen for DCs in real time
       onSnapshot(collection(db, 'dcs'), snapshot => {
-        if (!snapshot.empty) {
-          const remoteDcs: DC[] = [];
-          snapshot.forEach(docSnap => {
-            remoteDcs.push(docSnap.data() as DC);
-          });
-          if (remoteDcs.length > 0) {
-            this.dcs = remoteDcs;
-            localStorage.setItem(STORAGE_KEYS.DCS, JSON.stringify(this.dcs));
-            this.notify();
+        const remoteDcs: DC[] = [];
+        snapshot.forEach(docSnap => {
+          remoteDcs.push(docSnap.data() as DC);
+        });
+        this.dcs = this.mergeLists(this.dcs, remoteDcs);
+        localStorage.setItem(STORAGE_KEYS.DCS, JSON.stringify(this.dcs));
+        this.dcs.forEach(d => {
+          if (!remoteDcs.some(r => r.id === d.id)) {
+            this.syncDocToFirestore('dcs', d.id, d);
           }
-        } else if (this.dcs.length > 0) {
-          this.dcs.forEach(d => this.syncDocToFirestore('dcs', d.id, d));
-        }
+        });
+        this.notify();
       }, err => {
         console.warn('Firestore dcs sync notice:', err.message);
       });
 
-      // 5. Listen for sectors in real time
+      // 5. Listen for sectors in real time (MERGED with local, NEVER OVERWRITTEN)
       onSnapshot(collection(db, 'sectors'), snapshot => {
-        if (!snapshot.empty) {
-          const remoteSectors: Sector[] = [];
-          snapshot.forEach(docSnap => {
-            remoteSectors.push(docSnap.data() as Sector);
-          });
-          if (remoteSectors.length > 0) {
-            this.sectors = remoteSectors;
-            localStorage.setItem(STORAGE_KEYS.SECTORS, JSON.stringify(this.sectors));
-            this.notify();
+        const remoteSectors: Sector[] = [];
+        snapshot.forEach(docSnap => {
+          remoteSectors.push(docSnap.data() as Sector);
+        });
+        this.sectors = this.mergeLists(this.sectors, remoteSectors);
+        localStorage.setItem(STORAGE_KEYS.SECTORS, JSON.stringify(this.sectors));
+        this.sectors.forEach(s => {
+          if (!remoteSectors.some(r => r.id === s.id)) {
+            this.syncDocToFirestore('sectors', s.id, s);
           }
-        } else if (this.sectors.length > 0) {
-          this.sectors.forEach(s => this.syncDocToFirestore('sectors', s.id, s));
-        }
+        });
+        this.notify();
       }, err => {
         console.warn('Firestore sectors sync notice:', err.message);
       });
 
       // 6. Listen for technical zones in real time
       onSnapshot(collection(db, 'technicalZones'), snapshot => {
-        if (!snapshot.empty) {
-          const remoteZones: TechnicalZone[] = [];
-          snapshot.forEach(docSnap => {
-            remoteZones.push(docSnap.data() as TechnicalZone);
-          });
-          if (remoteZones.length > 0) {
-            this.zones = remoteZones;
-            localStorage.setItem(STORAGE_KEYS.ZONES, JSON.stringify(this.zones));
-            this.notify();
+        const remoteZones: TechnicalZone[] = [];
+        snapshot.forEach(docSnap => {
+          remoteZones.push(docSnap.data() as TechnicalZone);
+        });
+        this.zones = this.mergeLists(this.zones, remoteZones);
+        localStorage.setItem(STORAGE_KEYS.ZONES, JSON.stringify(this.zones));
+        this.zones.forEach(z => {
+          if (!remoteZones.some(r => r.id === z.id)) {
+            this.syncDocToFirestore('technicalZones', z.id, z);
           }
-        } else if (this.zones.length > 0) {
-          this.zones.forEach(z => this.syncDocToFirestore('technicalZones', z.id, z));
-        }
+        });
+        this.notify();
       }, err => {
         console.warn('Firestore technicalZones sync notice:', err.message);
       });

@@ -40,6 +40,13 @@ export const TechniciensView: React.FC<TechniciensViewProps> = ({ currentUser })
   const [selectedDcFilter, setSelectedDcFilter] = useState<string>('ALL');
   const [selectedSectorFilter, setSelectedSectorFilter] = useState<string>('ALL');
   const [selectedTechForTelegram, setSelectedTechForTelegram] = useState<Technician | null>(null);
+  const [, setStoreVersion] = useState(0);
+
+  // Subscribe directly to store for instant reactivity when technicians/sectors change
+  React.useEffect(() => {
+    const unsub = store.subscribe(() => setStoreVersion(v => v + 1));
+    return () => unsub();
+  }, []);
   
   // Available referentials based on user scope
   const dcs = store.getDCs();

@@ -33,6 +33,13 @@ import { telegramBotService } from '../../services/telegramBotService';
 
 export const ReferentielView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'HIERARCHY' | 'DCS' | 'SECTORS' | 'ZONES' | 'USERS' | 'ALIASES' | 'TELEGRAM_CONFIG'>('HIERARCHY');
+  const [, setStoreVersion] = useState(0);
+
+  // Subscribe directly to store for instant reactivity when items are added/modified
+  React.useEffect(() => {
+    const unsub = store.subscribe(() => setStoreVersion(v => v + 1));
+    return () => unsub();
+  }, []);
   
   // Store data
   const dcs = store.getDCs();
