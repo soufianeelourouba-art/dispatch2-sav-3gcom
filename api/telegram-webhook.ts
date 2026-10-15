@@ -10,11 +10,13 @@ import {
   findTechnicianByChat,
   findTechnicianByToken,
   openTicketsOf,
+  recordSplitterReport,
   recordTechnicianReport,
+  sendWorkOrdersTo,
   technicianIsBlocked,
   workOrderButtons,
+  type TechnicianReport,
 } from './_lib/tickets.js';
-import { formatTicketMessage } from '../src/domain/tickets.js';
 import { LITIGE_REASONS } from '../src/types/index.js';
 import type { Technician } from '../src/types/index.js';
 
@@ -62,9 +64,9 @@ async function onMessage(message: any) {
   // Free-text answer to a pending litige question
   const session = await sessions().doc(chatId).get();
   if (session.exists && !text.startsWith('/')) {
-    const { ticketId, reasonCode } = session.data() as { ticketId: string; reasonCode: 'RDV' | 'AUTRE' };
+    const { ticketId, reasonCode, group } = session.data() as { ticketId: string; reasonCode: 'RDV' | 'AUTRE'; group?: boolean };
     await sessions().doc(chatId).delete();
-    return report(chatId, tech, ticketId, {
+    return report(chatId, tech, ticketId, !!group, {
       kind: 'LITIGE',
       reasonCode,
       rdvDateTime: reasonCode === 'RDV' ? text : undefined,
@@ -101,15 +103,17 @@ async function activate(chatId: string, token: string, from: any) {
 async function listTickets(chatId: string, tech: Technician) {
   const tickets = await openTicketsOf(tech.id);
   if (tickets.length === 0) return sendMessage(chatId, '📭 Aucune intervention en cours pour le moment.');
-  for (const ticket of tickets) {
-    await sendMessage(chatId, formatTicketMessage(ticket), workOrderButtons(ticket.id));
-  }
+  await sendWorkOrdersTo(tech, tickets);
 }
 
 async function onCallback(query: any) {
   const chatId = String(query.message?.chat?.id ?? query.from.id);
   const messageId: number | undefined = query.message?.message_id;
-  const [action, a, b] = String(query.data || '').split(':');
+  const [rawAction, a, b] = String(query.data || '').split(':');
+  // "g." prefix: the action applies to the whole splitter incident
+  const group = rawAction.startsWith('g.');
+  const action = group ? rawAction.slice(2) : rawAction;
+  const p = group ? 'g.' : '';
 
   const tech = await findTechnicianByChat(chatId);
   if (!tech || technicianIsBlocked(tech)) {
@@ -120,9 +124,9 @@ async function onCallback(query: any) {
     case 'nf': // choose NF type
       await answerCallback(query.id);
       if (messageId) await editButtons(chatId, messageId, [
-        [{ text: '✅ NF standard', callback_data: `nfs:${a}` }],
-        [{ text: '⚙️ NF config centrale + ONT', callback_data: `nfc:${a}` }],
-        [{ text: '↩️ Retour', callback_data: `back:${a}` }],
+        [{ text: group ? '✅ NF standard (tout le splitter)' : '✅ NF standard', callback_data: `${p}nfs:${a}` }],
+        [{ text: '⚙️ NF config centrale + ONT', callback_data: `${p}nfc:${a}` }],
+        [{ text: '↩️ Retour', callback_data: `${p}back:${a}` }],
       ]);
       return;
 
@@ -130,13 +134,13 @@ async function onCallback(query: any) {
     case 'nfc':
       await answerCallback(query.id);
       if (messageId) await editButtons(chatId, messageId, []);
-      return report(chatId, tech, a, { kind: 'NF', nfType: action === 'nfc' ? 'CENTRAL_CONFIG' : 'STANDARD' });
+      return report(chatId, tech, a, group, { kind: 'NF', nfType: action === 'nfc' ? 'CENTRAL_CONFIG' : 'STANDARD' });
 
     case 'lit': // choose litige reason
       await answerCallback(query.id);
       if (messageId) await editButtons(chatId, messageId, [
-        ...LITIGE_REASONS.map((r, i) => [{ text: r.label, callback_data: `lr:${i}:${a}` }]),
-        [{ text: '↩️ Retour', callback_data: `back:${a}` }],
+        ...LITIGE_REASONS.map((r, i) => [{ text: r.label, callback_data: `${p}lr:${i}:${a}` }]),
+        [{ text: '↩️ Retour', callback_data: `${p}back:${a}` }],
       ]);
       return;
 
@@ -147,15 +151,15 @@ async function onCallback(query: any) {
       await answerCallback(query.id);
       if (messageId) await editButtons(chatId, messageId, []);
       if (NEEDS_DETAIL[reason.code]) {
-        await sessions().doc(chatId).set({ ticketId, reasonCode: reason.code, createdAt: new Date().toISOString() });
+        await sessions().doc(chatId).set({ ticketId, reasonCode: reason.code, group, createdAt: new Date().toISOString() });
         return askForReply(chatId, NEEDS_DETAIL[reason.code]);
       }
-      return report(chatId, tech, ticketId, { kind: 'LITIGE', reasonCode: reason.code });
+      return report(chatId, tech, ticketId, group, { kind: 'LITIGE', reasonCode: reason.code });
     }
 
     case 'back':
       await answerCallback(query.id);
-      if (messageId) await editButtons(chatId, messageId, workOrderButtons(a));
+      if (messageId) await editButtons(chatId, messageId, workOrderButtons(a, group));
       return;
 
     default:
@@ -163,12 +167,18 @@ async function onCallback(query: any) {
   }
 }
 
-async function report(chatId: string, tech: Technician, ticketId: string, payload: Parameters<typeof recordTechnicianReport>[2]) {
+async function report(chatId: string, tech: Technician, ticketId: string, group: boolean, payload: TechnicianReport) {
   try {
-    const ticket = await recordTechnicianReport(tech, ticketId, payload);
+    const tickets = group
+      ? await recordSplitterReport(tech, ticketId, payload)
+      : [await recordTechnicianReport(tech, ticketId, payload)];
+    const first = tickets[0];
+    const what = tickets.length > 1
+      ? `les <b>${tickets.length} tickets</b> du splitter ${first.splitterRef}`
+      : `le ticket ${first.ticketNumber}`;
     const summary = payload.kind === 'NF'
-      ? `🟢 <b>NF enregistré</b> pour le ticket ${ticket.ticketNumber}. Merci !`
-      : `🔴 <b>Litige enregistré</b> pour le ticket ${ticket.ticketNumber} (${ticket.lastLitigeReasonLabel}). L'orienteur est prévenu.`;
+      ? `🟢 <b>NF enregistré</b> pour ${what}. Merci !`
+      : `🔴 <b>Litige enregistré</b> pour ${what} (${first.lastLitigeReasonLabel}). L'orienteur est prévenu.`;
     return sendMessage(chatId, summary);
   } catch (err) {
     if (err instanceof AccessError) return sendMessage(chatId, `⚠️ ${err.message}`);

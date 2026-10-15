@@ -2,7 +2,8 @@
 // and the dispatch notifications.
 import { randomBytes } from 'node:crypto';
 import { adminDb } from './admin.js';
-import { applyEventToTicket, formatTicketMessage } from '../../src/domain/tickets.js';
+import { applyEventToTicket, formatTicketMessage, formatSplitterGroupMessage } from '../../src/domain/tickets.js';
+import { splitterKey } from '../../src/domain/splitter.js';
 import { LITIGE_REASONS } from '../../src/types/index.js';
 import type { LitigeReasonCode, Technician, Ticket, TicketEvent } from '../../src/types/index.js';
 import { sendMessage } from './telegram.js';
@@ -90,23 +91,46 @@ export async function recordTechnicianReport(tech: Technician, ticketId: string,
   });
 }
 
-export const workOrderButtons = (ticketId: string) => [[
-  { text: '🟢 NF (Normalisé)', callback_data: `nf:${ticketId}` },
-  { text: '🔴 Litige (LC)', callback_data: `lit:${ticketId}` },
-]];
+// Callback data "g.<action>:<ticketId>" applies the action to the whole splitter incident.
+export const workOrderButtons = (ticketId: string, group = false) => {
+  const p = group ? 'g.' : '';
+  return [[
+    { text: group ? '🟢 NF splitter (tous)' : '🟢 NF (Normalisé)', callback_data: `${p}nf:${ticketId}` },
+    { text: group ? '🔴 Litige splitter (tous)' : '🔴 Litige (LC)', callback_data: `${p}lit:${ticketId}` },
+  ]];
+};
 
-// Sends the work order to the assigned technician and records TELEGRAM_SENT.
-export async function sendWorkOrder(ticket: Ticket): Promise<{ sent: boolean; reason?: string }> {
-  const db = adminDb();
-  if (!ticket.currentAssignedTechId) return { sent: false, reason: 'Aucun technicien affecté' };
-  const techSnap = await db.collection('technicians').doc(ticket.currentAssignedTechId).get();
-  if (!techSnap.exists) return { sent: false, reason: 'Technicien introuvable' };
-  const tech = { ...(techSnap.data() as Technician), id: techSnap.id };
-  if (!tech.telegramChatId) return { sent: false, reason: `${tech.fullName} n'a pas activé Telegram` };
-  if (technicianIsBlocked(tech)) return { sent: false, reason: `Accès Telegram de ${tech.fullName} suspendu` };
+// Open tickets of the technician on the same splitter as `ticket` (including it).
+export async function splitterSiblings(tech: Technician, ticket: Ticket): Promise<Ticket[]> {
+  const key = splitterKey(ticket);
+  if (!key) return [ticket];
+  return (await openTicketsOf(tech.id)).filter(t => splitterKey(t) === key);
+}
 
-  await sendMessage(tech.telegramChatId, formatTicketMessage(ticket), workOrderButtons(ticket.id));
+// NF / litige on every open ticket of the splitter incident (or just the ticket without splitter).
+export async function recordSplitterReport(tech: Technician, ticketId: string, report: TechnicianReport): Promise<Ticket[]> {
+  const snap = await adminDb().collection('tickets').doc(ticketId).get();
+  if (!snap.exists) throw new AccessError('Ticket introuvable.');
+  const ticket = { ...(snap.data() as Ticket), id: snap.id };
+  const siblings = ticket.splitterRef ? await splitterSiblings(tech, ticket) : [ticket];
+  if (siblings.length === 0) throw new AccessError('Aucun ticket ouvert sur ce splitter ne vous est affecté.');
 
+  const notes = ticket.splitterRef && siblings.length > 1
+    ? `${report.notes ? report.notes + ' — ' : ''}Compte-rendu collectif splitter ${ticket.splitterRef} (${siblings.length} tickets).`
+    : report.notes;
+  const updated: Ticket[] = [];
+  for (const sibling of siblings) {
+    try {
+      updated.push(await recordTechnicianReport(tech, sibling.id, { ...report, notes }));
+    } catch (err) {
+      if (!(err instanceof AccessError)) throw err; // a sibling closed meanwhile: skip it
+    }
+  }
+  if (updated.length === 0) throw new AccessError('Ces tickets ne vous sont plus affectés ou sont déjà clôturés.');
+  return updated;
+}
+
+async function recordTelegramSent(tech: Technician, ticket: Ticket, note: string) {
   const event: TicketEvent = {
     id: `evt-${Date.now()}-${randomBytes(3).toString('hex')}`,
     ticketId: ticket.id,
@@ -116,9 +140,39 @@ export async function sendWorkOrder(ticket: Ticket): Promise<{ sent: boolean; re
     actorName: 'Bot Telegram 3GCOM',
     technicianId: tech.id,
     technicianName: tech.fullName,
-    notes: `Ordre de travail transmis sur le Telegram de ${tech.fullName}.`,
+    notes: note,
     createdAt: new Date().toISOString(),
   };
-  await db.collection('events').doc(event.id).set(clean(event));
-  return { sent: true };
+  await adminDb().collection('events').doc(event.id).set(clean(event));
+}
+
+/**
+ * Sends work orders to one technician. Tickets sharing a splitter with at least one other open
+ * ticket of this technician are sent as a single grouped message. TELEGRAM_SENT is recorded for
+ * the tickets listed in `recordFor` (the ones just dispatched).
+ */
+export async function sendWorkOrdersTo(tech: Technician, tickets: Ticket[], recordFor: Set<string> = new Set()) {
+  if (!tech.telegramChatId) throw new AccessError(`${tech.fullName} n'a pas activé Telegram`);
+  if (technicianIsBlocked(tech)) throw new AccessError(`Accès Telegram de ${tech.fullName} suspendu`);
+
+  const allOpen = await openTicketsOf(tech.id);
+  const handled = new Set<string>();
+  for (const ticket of tickets) {
+    if (handled.has(ticket.id)) continue;
+    const key = splitterKey(ticket);
+    const group = key ? allOpen.filter(t => splitterKey(t) === key) : [];
+    if (group.length > 1) {
+      group.forEach(t => handled.add(t.id));
+      await sendMessage(tech.telegramChatId, formatSplitterGroupMessage(ticket.splitterRef!, group), workOrderButtons(ticket.id, true));
+      for (const t of group.filter(t => recordFor.has(t.id))) {
+        await recordTelegramSent(tech, t, `Incident splitter ${ticket.splitterRef} (${group.length} tickets) transmis sur le Telegram de ${tech.fullName}.`);
+      }
+    } else {
+      handled.add(ticket.id);
+      await sendMessage(tech.telegramChatId, formatTicketMessage(ticket), workOrderButtons(ticket.id));
+      if (recordFor.has(ticket.id)) {
+        await recordTelegramSent(tech, ticket, `Ordre de travail transmis sur le Telegram de ${tech.fullName}.`);
+      }
+    }
+  }
 }

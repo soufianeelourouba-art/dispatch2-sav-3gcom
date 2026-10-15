@@ -70,6 +70,7 @@ export function parseExcelBuffer(
         clientPhone: item.clientPhone,
         clientAddress: item.clientAddress,
         rawZoneText: item.rawZoneText,
+        splitterRef: item.splitterRef,
         technicalZoneId: item.resolvedZoneId,
         sectorId: targetSectorId,
         registeredAt: item.registeredAt,
@@ -131,6 +132,7 @@ export function generateSampleExcelFile(targetSectorId?: string): ArrayBuffer {
       'Téléphone': '06 61 22 33 44',
       'Adresse Client': `Résidence Al Mansour, ${z1}`,
       'Zone MSAN': z1,
+      'N° Splitter': 'SP-TEST-01',
       'Date Enregistrement': '2026-10-14 08:30',
     },
     {
@@ -140,6 +142,7 @@ export function generateSampleExcelFile(targetSectorId?: string): ArrayBuffer {
       'Téléphone': '06 62 33 44 55',
       'Adresse Client': `Avenue Mohammed V, ${z2}`,
       'Zone MSAN': z2,
+      'N° Splitter': '',
       'Date Enregistrement': '2026-10-14 08:45',
     },
     {
@@ -149,6 +152,7 @@ export function generateSampleExcelFile(targetSectorId?: string): ArrayBuffer {
       'Téléphone': '05 22 40 11 22',
       'Adresse Client': `Bd Hassan II, ${z3}`,
       'Zone MSAN': z3,
+      'N° Splitter': '',
       'Date Enregistrement': '2026-10-14 09:00',
     },
     {
@@ -158,6 +162,7 @@ export function generateSampleExcelFile(targetSectorId?: string): ArrayBuffer {
       'Téléphone': '06 61 45 88 12',
       'Adresse Client': `Immeuble 4B, ${z1}`,
       'Zone MSAN': z1,
+      'N° Splitter': 'SP-TEST-01',
       'Date Enregistrement': '2026-10-14 09:15',
     },
     {
@@ -167,6 +172,7 @@ export function generateSampleExcelFile(targetSectorId?: string): ArrayBuffer {
       'Téléphone': '06 64 77 88 99',
       'Adresse Client': `Quartier Administratif, ${z2}`,
       'Zone MSAN': z2,
+      'N° Splitter': '',
       'Date Enregistrement': '2026-10-14 09:30',
     },
     {
@@ -177,6 +183,7 @@ export function generateSampleExcelFile(targetSectorId?: string): ArrayBuffer {
       'Téléphone': '06 00 00 00 00',
       'Adresse Client': 'Adresse test',
       'Zone MSAN': z1,
+      'N° Splitter': '',
       'Date Enregistrement': '2026-10-14 09:35',
     },
     {
@@ -187,6 +194,7 @@ export function generateSampleExcelFile(targetSectorId?: string): ArrayBuffer {
       'Téléphone': '06 65 11 22 33',
       'Adresse Client': 'Nouvelle Extension Urbaine',
       'Zone MSAN': 'MSAN-NOUVELLE-EXTENSION',
+      'N° Splitter': '',
       'Date Enregistrement': '2026-10-14 09:40',
     },
   ];

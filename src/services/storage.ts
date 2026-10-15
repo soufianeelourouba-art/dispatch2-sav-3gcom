@@ -11,11 +11,14 @@ import {
   SumCheckResult,
   EventType,
   LitigeReasonCode,
-  LITIGE_REASONS
+  LITIGE_REASONS,
+  ManualTicketNature,
+  MANUAL_TICKET_NATURES,
 } from '../types';
 import { db, auth, createAuthAccount } from './firebase';
 import { computeTicketSLA, reduceTicketStatus, applyEventToTicket, computeSumCheck } from '../domain/tickets';
 import { notifyTechnicians } from './api';
+import { normalizeSplitterRef } from '../domain/splitter';
 import {
   collection,
   doc,
@@ -704,6 +707,70 @@ class AppStateStore {
       notes: reason ? `Réaffectation manuelle : ${reason}` : 'Réaffectation manuelle par l\'orienteur.',
     });
     this.sendWorkOrders([ticketId]);
+  }
+
+  // --- Ticket created in the app (incident without operator ticket, billable) ---
+  public createManualTicket(
+    params: {
+      nature: ManualTicketNature;
+      description: string;
+      sectorId: string;
+      technicalZoneId: string;
+      splitterRef?: string;
+      clientName?: string;
+      clientPhone?: string;
+      clientAddress?: string;
+      technician?: { id: string; fullName: string };
+    },
+    actor: User
+  ): Ticket {
+    const now = new Date().toISOString();
+    const ticketNumber = `INT-${now.slice(0, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const zone = this.zones.find(z => z.id === params.technicalZoneId);
+    const natureLabel = MANUAL_TICKET_NATURES.find(n => n.code === params.nature)?.label || 'Intervention hors ticket';
+
+    const ticket: Ticket = {
+      id: ticketDocId(ticketNumber),
+      ticketNumber,
+      clientNumber: '—',
+      clientName: params.clientName?.trim() || natureLabel,
+      clientPhone: params.clientPhone?.trim() || '',
+      clientAddress: params.clientAddress?.trim() || '',
+      rawZoneText: zone?.msanCode || zone?.label || 'NON_SPECIFIE',
+      technicalZoneId: params.technicalZoneId,
+      sectorId: params.sectorId,
+      registeredAt: now,
+      visitCount: 1,
+      currentStatus: 'TO_ASSIGN',
+      isClosed: false,
+      ...computeTicketSLA(now),
+      splitterRef: normalizeSplitterRef(params.splitterRef),
+      origin: 'MANUAL',
+      manualNature: params.nature,
+      description: params.description.trim(),
+      createdByName: actor.name,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.tickets.unshift(ticket);
+    this.persist();
+    this.syncDocToFirestore('tickets', ticket.id, ticket);
+    this.addTicketEvent({
+      ticketId: ticket.id,
+      eventType: 'MANUAL_CREATED',
+      actorRole: actor.role === 'MANAGER' ? 'MANAGER' : 'DISPATCHER',
+      actorName: actor.name,
+      notes: `${natureLabel} (hors ticket opérateur) : ${ticket.description}`,
+    });
+
+    if (params.technician) {
+      this.validateDispatch(
+        [{ ticketId: ticket.id, technicianId: params.technician.id, technicianName: params.technician.fullName }],
+        actor.name
+      );
+    }
+    return ticket;
   }
 
   // --- Excel Import & Upsert ---

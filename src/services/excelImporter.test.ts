@@ -21,6 +21,9 @@ describe('fichier type (bouton « Test 1 clic »)', () => {
 
     expect(parsed.totalRawRows).toBe(7);
     expect(parsed.detectedColumns.clientNameCol).toBe('Nom Abonné');
+    expect(parsed.detectedColumns.splitterCol).toBe('N° Splitter');
+    // rows 1 and 4 share a splitter (collective incident)
+    expect(parsed.previewRows.map(r => r.splitterRef)).toEqual(['SP-TEST-01', undefined, undefined, 'SP-TEST-01', undefined, undefined, undefined]);
     expect(parsed.previewRows[0]).toMatchObject({
       clientName: 'Karim Bensouda',
       resolvedZoneId: 'z1',

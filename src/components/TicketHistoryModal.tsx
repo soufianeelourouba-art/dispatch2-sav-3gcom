@@ -207,6 +207,7 @@ export const TicketHistoryModal: React.FC<TicketHistoryModalProps> = ({ ticket, 
 function renderEventTitle(type: string): string {
   switch (type) {
     case 'IMPORT': return '📥 Import / Enregistrement initial';
+    case 'MANUAL_CREATED': return '🛠 Ticket hors opérateur créé';
     case 'PROPOSED': return '💡 Proposition moteur calculée';
     case 'ASSIGNED': return '👤 Affectation validée';
     case 'REASSIGNED': return '🔄 Réaffectation manuelle';

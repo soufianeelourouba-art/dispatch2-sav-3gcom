@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { User, ImportReport } from '../../types';
 import { store } from '../../services/storage';
+import { formatCasablancaDateTime } from '../../domain/format';
 import { parseExcelBuffer, generateSampleExcelFile, InterpretedRow, DetectedColumns } from '../../services/excelImporter';
 import { 
   UploadCloud, 
@@ -316,6 +317,31 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
             </button>
           </div>
 
+          {detectedColumns && (
+            <div className="flex flex-wrap gap-1.5 text-[11px]">
+              <span className="font-semibold text-slate-600 mr-1">Colonnes reconnues :</span>
+              {([
+                ['N° réclamation', detectedColumns.ticketNumberCol],
+                ['Code client', detectedColumns.clientNumberCol],
+                ['Nom client', detectedColumns.clientNameCol],
+                ['Téléphone', detectedColumns.clientPhoneCol],
+                ['Adresse', detectedColumns.clientAddressCol],
+                ['Zone', detectedColumns.zoneTextCol],
+                ['Splitter', detectedColumns.splitterCol],
+                ['Date', detectedColumns.registeredAtCol],
+              ] as [string, string | undefined][]).map(([field, column]) => (
+                <span
+                  key={field}
+                  className={`px-2 py-0.5 rounded-md border ${
+                    column ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}
+                >
+                  {field} : <b>{column ? `« ${column} »` : 'non trouvée'}</b>
+                </span>
+              ))}
+            </div>
+          )}
+
           <div className="overflow-x-auto border border-slate-200 rounded-xl">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-[11px]">
@@ -326,6 +352,8 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
                   <th className="py-3 px-3">Téléphone</th>
                   <th className="py-3 px-3">Zone lue</th>
                   <th className="py-3 px-3">Zone validée (Secteur)</th>
+                  <th className="py-3 px-3">Splitter</th>
+                  <th className="py-3 px-3">Date (Maroc)</th>
                   <th className="py-3 px-3">Validation</th>
                 </tr>
               </thead>
@@ -350,6 +378,8 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
                         </span>
                       )}
                     </td>
+                    <td className="py-2.5 px-3 font-mono font-semibold text-brand-orange-600">{row.splitterRef || '—'}</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-600 whitespace-nowrap">{formatCasablancaDateTime(row.registeredAt)}</td>
                     <td className="py-2.5 px-3">
                       {row.isValid ? (
                         <span className="text-emerald-700 font-semibold text-[11px]">Prêt au dispatch</span>

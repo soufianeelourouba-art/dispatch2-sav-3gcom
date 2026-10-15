@@ -1,6 +1,7 @@
 // Pure ticket rules, shared by the browser (storage.ts) and the server (api/).
 // No Firebase or browser imports here.
-import type { SLAStatus, SumCheckResult, Ticket, TicketEvent, TicketStatus } from '../types';
+import type { ManualTicketNature, SLAStatus, SumCheckResult, Ticket, TicketEvent, TicketStatus } from '../types';
+import { MANUAL_TICKET_NATURES } from '../types';
 
 // --- SLA Invariant (24-Hour Strict SLA) ---
 export function computeTicketSLA(registeredAt: string): {
@@ -128,18 +129,46 @@ export function formatTicketMessage(ticket: Ticket): string {
       (ticket.reopenedWithNewPhone ? `📞 Nouveau contact : <b>${escapeHtml(ticket.reopenedWithNewPhone)}</b>\n` : '');
   }
 
+  const manualBanner = ticket.origin === 'MANUAL'
+    ? `🛠 <b>${escapeHtml(manualNatureLabel(ticket.manualNature).toUpperCase())}</b> (hors ticket opérateur)\n` +
+      (ticket.description ? `📝 ${escapeHtml(ticket.description)}\n` : '')
+    : '';
+
   return (
     `🚨 <b>INTERVENTION FIBRE OPTIQUE 3GCOM</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    manualBanner +
     `📋 <b>Ticket :</b> ${escapeHtml(ticket.ticketNumber)}\n` +
     `👤 <b>Abonné :</b> ${escapeHtml(ticket.clientName)} (Réf : ${escapeHtml(ticket.clientNumber)})\n` +
     `📞 <b>Téléphone :</b> ${escapeHtml(ticket.clientPhone)}\n` +
     `📍 <b>Adresse :</b> ${escapeHtml(ticket.clientAddress)}\n` +
     `🏢 <b>Zone MSAN :</b> ${escapeHtml(ticket.rawZoneText)}` +
+    (ticket.splitterRef ? `\n🔌 <b>Splitter :</b> ${escapeHtml(ticket.splitterRef)}` : '') +
     historyBanner +
     reopenBanner +
     `\n━━━━━━━━━━━━━━━━━━━━━━━━\n` +
     `<i>Répondez avec l'un des boutons ci-dessous.</i>`
+  );
+}
+
+export function manualNatureLabel(nature?: ManualTicketNature): string {
+  return MANUAL_TICKET_NATURES.find(n => n.code === nature)?.label || 'Intervention hors ticket';
+}
+
+// One work order for every ticket of a splitter incident: a single repair closes them all.
+export function formatSplitterGroupMessage(splitterRef: string, tickets: Ticket[]): string {
+  const lines = tickets.map((t, i) =>
+    `${i + 1}. <b>${escapeHtml(t.ticketNumber)}</b> — ${escapeHtml(t.clientName)} · 📞 ${escapeHtml(t.clientPhone)}\n` +
+    `    📍 ${escapeHtml(t.clientAddress)}`
+  );
+  return (
+    `🔴 <b>INCIDENT SPLITTER ${escapeHtml(splitterRef)}</b>\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `👥 <b>${tickets.length} clients impactés</b> · Zone ${escapeHtml(tickets[0]?.rawZoneText)}\n` +
+    `Priorité : un seul problème à résoudre sur le splitter.\n\n` +
+    lines.join('\n') +
+    `\n━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `<i>Le compte-rendu (NF ou litige) s'applique aux ${tickets.length} tickets.</i>`
   );
 }
 

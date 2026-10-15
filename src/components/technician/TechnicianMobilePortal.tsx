@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { LITIGE_REASONS, LitigeReasonCode } from '../../types';
+import { LITIGE_REASONS, LitigeReasonCode, MANUAL_TICKET_NATURES } from '../../types';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -23,6 +23,10 @@ interface PortalTicket {
   clientAddress: string;
   rawZoneText: string;
   currentStatus: string;
+  splitterRef?: string;
+  origin?: 'IMPORT' | 'MANUAL';
+  manualNature?: string;
+  description?: string;
 }
 
 interface TechnicianMobilePortalProps {
@@ -54,6 +58,16 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
 
   const [notificationMsg, setNotificationMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // A report on a splitter ticket applies to the whole splitter incident by default
+  const [applyToSplitter, setApplyToSplitter] = useState(true);
+
+  const splitterCount = (t: PortalTicket) =>
+    t.splitterRef ? tickets.filter(x => x.splitterRef === t.splitterRef).length : 1;
+  const activeGroupSize = activeTicket ? splitterCount(activeTicket) : 1;
+  const reportsWholeSplitter = activeGroupSize > 1 && applyToSplitter;
+  // Splitter incidents first, their tickets next to each other
+  const sortedTickets = [...tickets].sort((a, b) =>
+    splitterCount(b) - splitterCount(a) || (a.splitterRef || '').localeCompare(b.splitterRef || ''));
 
   const load = useCallback(async () => {
     try {
@@ -87,7 +101,12 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
       const res = await fetch('/api/portal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: activationToken, ticketId: activeTicket.id, report }),
+        body: JSON.stringify({
+          token: activationToken,
+          ticketId: activeTicket.id,
+          report,
+          scope: reportsWholeSplitter ? 'SPLITTER' : 'TICKET',
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -172,7 +191,9 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
         cableLengthMeters: Number(cableLength) || undefined,
         notes: nfNotes.trim() || undefined,
       },
-      `Ticket ${activeTicket.ticketNumber} clôturé NF. L'orienteur a reçu la confirmation en direct.`
+      reportsWholeSplitter
+        ? `Splitter ${activeTicket.splitterRef} : ${activeGroupSize} tickets clôturés NF. L'orienteur a reçu la confirmation.`
+        : `Ticket ${activeTicket.ticketNumber} clôturé NF. L'orienteur a reçu la confirmation en direct.`
     );
   };
 
@@ -186,7 +207,9 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
         rdvDateTime: litigeReason === 'RDV' ? rdvDateTime : undefined,
         notes: litigeNotes.trim(),
       },
-      `Litige signalé pour le ticket ${activeTicket.ticketNumber}. L'orienteur est immédiatement alerté.`
+      reportsWholeSplitter
+        ? `Litige signalé pour les ${activeGroupSize} tickets du splitter ${activeTicket.splitterRef}. L'orienteur est alerté.`
+        : `Litige signalé pour le ticket ${activeTicket.ticketNumber}. L'orienteur est immédiatement alerté.`
     );
   };
 
@@ -254,6 +277,20 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
             </div>
 
             <form onSubmit={handleCloseNF} className="space-y-4">
+              {activeGroupSize > 1 && (
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-orange-950/60 border border-orange-700/70 text-xs text-orange-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={applyToSplitter}
+                    onChange={e => setApplyToSplitter(e.target.checked)}
+                    className="mt-0.5 rounded"
+                  />
+                  <span>
+                    <b>Appliquer aux {activeGroupSize} tickets du splitter {activeTicket.splitterRef}</b>
+                    <span className="block text-orange-200/80">Un seul compte-rendu pour tous les clients de ce splitter.</span>
+                  </span>
+                </label>
+              )}
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                   <Ruler className="w-3.5 h-3.5 text-emerald-400" />
@@ -328,6 +365,20 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
             </div>
 
             <form onSubmit={handleReportLitige} className="space-y-4">
+              {activeGroupSize > 1 && (
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-orange-950/60 border border-orange-700/70 text-xs text-orange-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={applyToSplitter}
+                    onChange={e => setApplyToSplitter(e.target.checked)}
+                    className="mt-0.5 rounded"
+                  />
+                  <span>
+                    <b>Appliquer aux {activeGroupSize} tickets du splitter {activeTicket.splitterRef}</b>
+                    <span className="block text-orange-200/80">Un seul compte-rendu pour tous les clients de ce splitter.</span>
+                  </span>
+                </label>
+              )}
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
                   Motif de Blocage Terrain *
@@ -407,7 +458,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
               </p>
             </div>
           ) : (
-            tickets.map(ticket => (
+            sortedTickets.map(ticket => (
               <div
                 key={ticket.id}
                 className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 space-y-3 shadow-md transition-all"
@@ -429,6 +480,25 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
 
                 {/* Client Info */}
                 <div className="space-y-1.5 text-xs">
+                  {(ticket.splitterRef || ticket.origin === 'MANUAL') && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {ticket.splitterRef && (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          splitterCount(ticket) > 1 ? 'bg-orange-500 text-white' : 'bg-slate-800 text-orange-300'
+                        }`}>
+                          🔌 Splitter {ticket.splitterRef}{splitterCount(ticket) > 1 ? ` · ${splitterCount(ticket)} tickets` : ''}
+                        </span>
+                      )}
+                      {ticket.origin === 'MANUAL' && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-900 text-violet-200">
+                          🛠 {MANUAL_TICKET_NATURES.find(n => n.code === ticket.manualNature)?.label || 'Hors ticket'}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {ticket.description && (
+                    <div className="text-xs text-slate-300 italic">📝 {ticket.description}</div>
+                  )}
                   <div className="font-bold text-white text-sm">
                     {ticket.clientName}
                   </div>
@@ -453,6 +523,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
                 <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/80">
                   <button
                     onClick={() => {
+                      setApplyToSplitter(true);
                       setActiveTicket(ticket);
                       setActionType('NF');
                     }}
@@ -464,6 +535,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
 
                   <button
                     onClick={() => {
+                      setApplyToSplitter(true);
                       setActiveTicket(ticket);
                       setActionType('LITIGE');
                     }}

@@ -5,6 +5,10 @@ import { formatCasablancaDateTime, formatSLADisplay } from '../../domain/format'
 import { calculateDispatchProposals } from '../../services/dispatchEngine';
 import { telegramGateway } from '../../services/telegramSimulator';
 import { LitigeResolutionModal } from './LitigeResolutionModal';
+import { ManualTicketModal } from '../tickets/ManualTicketModal';
+import { SplitterBadge, ManualTicketBadge } from '../tickets/TicketBadges';
+import { SplitterIncidentsPanel } from '../tickets/SplitterIncidentsPanel';
+import { splitterKey, groupBySplitter } from '../../domain/splitter';
 import { 
   Send, 
   RotateCcw, 
@@ -21,7 +25,10 @@ import {
   Flame,
   ShieldAlert,
   ChevronDown,
-  Sparkles
+  Sparkles,
+  Cable,
+  Plus,
+  X
 } from 'lucide-react';
 
 interface DispatchViewProps {
@@ -41,7 +48,10 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
   const [selectedSectorId, setSelectedSectorId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewScope, setViewScope] = useState<'PENDING_DISPATCH' | 'ALREADY_SENT' | 'ALL'>('PENDING_DISPATCH');
-  const [activeSlaFilter, setActiveSlaFilter] = useState<'ALL' | 'OVERDUE' | 'CRITICAL' | 'LITIGES'>('ALL');
+  const [activeSlaFilter, setActiveSlaFilter] = useState<'ALL' | 'OVERDUE' | 'CRITICAL' | 'LITIGES' | 'SPLITTER'>('ALL');
+  const [splitterFilter, setSplitterFilter] = useState<string | null>(null);
+  const [isManualTicketOpen, setIsManualTicketOpen] = useState(false);
+  const [manualCreatedMsg, setManualCreatedMsg] = useState<string | null>(null);
   const [selectedTechChanges, setSelectedTechChanges] = useState<Record<string, string>>({});
   const [isSuccessSent, setIsSuccessSent] = useState(false);
   const [justSentCount, setJustSentCount] = useState<number>(0);
@@ -72,6 +82,17 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
   const overdueTickets = useMemo(() => tickets.filter(t => t.slaStatus === 'EXPIRED' && !t.isClosed), [tickets]);
   const criticalTickets = useMemo(() => tickets.filter(t => t.slaStatus === 'WARNING' && !t.isClosed), [tickets]);
   const litigeTickets = useMemo(() => tickets.filter(t => t.currentStatus === 'LITIGE'), [tickets]);
+
+  // Splitter incidents: open tickets sharing a splitter (same sector) — one intervention for all
+  const splitterGroups = useMemo(() => groupBySplitter(tickets), [tickets]);
+  const splitterGroupSize = useMemo(() => {
+    const sizes = new Map<string, number>();
+    splitterGroups.forEach(g => sizes.set(g.key, g.openCount));
+    return (ticket: Ticket) => {
+      const key = splitterKey(ticket);
+      return key ? sizes.get(key) || 1 : 1;
+    };
+  }, [splitterGroups]);
 
   // Run dispatch engine on dispatchable tickets for the selected sector scope
   const simulationResult = useMemo(() => {
@@ -148,6 +169,12 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
       list = list.filter(t => t.slaStatus === 'WARNING' && !t.isClosed);
     } else if (activeSlaFilter === 'LITIGES') {
       list = list.filter(t => t.currentStatus === 'LITIGE');
+    } else if (activeSlaFilter === 'SPLITTER') {
+      list = list.filter(t => splitterGroupSize(t) > 1);
+    }
+
+    if (splitterFilter) {
+      list = list.filter(t => t.splitterRef === splitterFilter);
     }
 
     if (searchQuery.trim()) {
@@ -156,22 +183,35 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
         t.ticketNumber.toLowerCase().includes(q) ||
         t.clientName.toLowerCase().includes(q) ||
         t.clientPhone.toLowerCase().includes(q) ||
-        t.rawZoneText.toLowerCase().includes(q)
+        t.rawZoneText.toLowerCase().includes(q) ||
+        (t.splitterRef || '').toLowerCase().includes(q) ||
+        (t.description || '').toLowerCase().includes(q)
       );
     }
 
-    // Sort order: SLA Overdue (HD) > SLA Warning > Normal
+    // Sort order: open first, splitter incidents (biggest first, tickets kept together), then SLA
     return list.sort((a, b) => {
       if (a.isClosed !== b.isClosed) return a.isClosed ? 1 : -1;
+      const ga = splitterGroupSize(a), gb = splitterGroupSize(b);
+      if (ga !== gb) return gb - ga;
+      if (ga > 1) {
+        const byKey = (splitterKey(a) || '').localeCompare(splitterKey(b) || '');
+        if (byKey !== 0) return byKey;
+      }
       return a.slaRemainingHours - b.slaRemainingHours;
     });
-  }, [baseList, activeSlaFilter, searchQuery]);
+  }, [baseList, activeSlaFilter, searchQuery, splitterFilter, splitterGroupSize]);
 
+  // Choosing a technician for a splitter ticket applies to every pending ticket of that splitter
   const handleManualReassign = (ticketId: string, newTechId: string) => {
-    setSelectedTechChanges(prev => ({
-      ...prev,
-      [ticketId]: newTechId,
-    }));
+    const ticket = dispatchableTickets.find(t => t.id === ticketId);
+    const key = ticket ? splitterKey(ticket) : null;
+    const siblings = key ? dispatchableTickets.filter(t => splitterKey(t) === key) : [];
+    setSelectedTechChanges(prev => {
+      const next = { ...prev, [ticketId]: newTechId };
+      siblings.forEach(t => { next[t.id] = newTechId; });
+      return next;
+    });
   };
 
   const handleValidateAndSend = () => {
@@ -253,7 +293,14 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <button
+            onClick={() => setIsManualTicketOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-xl transition-colors whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Créer un ticket</span>
+          </button>
           {isSuccessSent && (
             <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-bold bg-emerald-50 px-3.5 py-2 rounded-xl border border-emerald-200 animate-in fade-in">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -273,7 +320,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
       </div>
 
       {/* SLA & HD Alert Dashboard Strip (§2) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Overdue HD Card */}
         <button
           onClick={() => setActiveSlaFilter(activeSlaFilter === 'OVERDUE' ? 'ALL' : 'OVERDUE')}
@@ -351,7 +398,54 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
             À réorienter ou valider par l'orienteur
           </span>
         </button>
+
+        {/* Splitter incidents Card */}
+        <button
+          onClick={() => setActiveSlaFilter(activeSlaFilter === 'SPLITTER' ? 'ALL' : 'SPLITTER')}
+          className={`p-4 rounded-xl border text-left transition-all ${
+            activeSlaFilter === 'SPLITTER'
+              ? 'bg-brand-orange-50 border-brand-orange-500 ring-2 ring-brand-orange-400/40'
+              : 'bg-white border-slate-200 hover:border-slate-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-orange-600 flex items-center gap-1.5">
+              <Cable className="w-4 h-4" />
+              <span>Incidents splitter</span>
+            </span>
+            <span className="w-6 h-6 rounded-full bg-brand-orange-50 text-brand-orange-600 font-bold font-mono text-xs flex items-center justify-center">
+              {splitterGroups.length}
+            </span>
+          </div>
+          <div className="text-2xl font-bold font-mono text-slate-900 mt-2">
+            {splitterGroups.reduce((n, g) => n + g.openCount, 0)} ticket(s)
+          </div>
+          <span className="text-[11px] text-brand-orange-600 block mt-1 font-medium">
+            Prioritaires : une intervention par splitter
+          </span>
+        </button>
       </div>
+
+      {manualCreatedMsg && (
+        <div className="bg-violet-50 border border-violet-200 p-3.5 rounded-2xl text-xs text-violet-900 font-semibold flex items-center justify-between gap-3">
+          <span>{manualCreatedMsg}</span>
+          <button onClick={() => setManualCreatedMsg(null)} className="text-violet-500 hover:text-violet-800" aria-label="Fermer"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
+      <SplitterIncidentsPanel
+        tickets={tickets}
+        technicians={technicians}
+        sectors={userSectors}
+        onSelectSplitter={ref => { setSplitterFilter(ref); setViewScope('ALL'); }}
+      />
+
+      {splitterFilter && (
+        <div className="flex items-center justify-between gap-3 bg-brand-orange-50 border border-brand-orange-400/50 px-4 py-2.5 rounded-xl text-xs">
+          <span className="font-semibold text-slate-800">Filtre : tickets du splitter <b className="font-mono">{splitterFilter}</b></span>
+          <button onClick={() => setSplitterFilter(null)} className="font-bold text-brand-orange-600 hover:underline">Retirer le filtre</button>
+        </div>
+      )}
 
       {/* Scope Toggles (§1: "quand je clique sur valider la liste reste toujours visible en bas") */}
       <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -499,6 +593,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
               <div
                 key={ticket.id}
                 className={`bg-white rounded-2xl border p-5 shadow-xs transition-all hover:shadow-md ${
+                  splitterGroupSize(ticket) > 1 && !ticket.isClosed ? 'border-brand-orange-400 border-l-4' :
                   ticket.slaStatus === 'EXPIRED' && !ticket.isClosed ? 'border-rose-300 ring-1 ring-rose-200' :
                   ticket.slaStatus === 'WARNING' && !ticket.isClosed ? 'border-amber-300' :
                   ticket.currentStatus === 'LITIGE' ? 'border-sky-300' :
@@ -547,7 +642,14 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
                          ticket.currentStatus === 'ASSIGNED' ? 'Transmis au technicien' :
                          'En attente dispatch'}
                       </span>
+
+                      <SplitterBadge ticket={ticket} groupSize={splitterGroupSize(ticket)} />
+                      <ManualTicketBadge ticket={ticket} />
                     </div>
+
+                    {ticket.description && (
+                      <div className="text-xs text-violet-900 bg-violet-50 rounded-lg px-2.5 py-1.5">📝 {ticket.description}</div>
+                    )}
 
                     <div className="text-xs space-y-0.5">
                       <div className="font-bold text-slate-900 text-sm">
@@ -635,6 +737,15 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
           })}
         </div>
       )}
+
+      <ManualTicketModal
+        isOpen={isManualTicketOpen}
+        currentUser={currentUser}
+        onClose={() => setIsManualTicketOpen(false)}
+        onCreated={(number, sent) => setManualCreatedMsg(
+          sent ? `Ticket ${number} créé et envoyé au technicien sur Telegram.` : `Ticket ${number} créé : il attend dans la file de dispatch.`
+        )}
+      />
 
       {/* Litige Resolution Modal for Dispatcher */}
       <LitigeResolutionModal

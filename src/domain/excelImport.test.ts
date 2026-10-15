@@ -61,6 +61,12 @@ describe('detectHeaders', () => {
     expect(detected.clientPhoneCol).toBe('Tel');
   });
 
+  it('reconnaît la colonne splitter', () => {
+    expect(detectHeaders(['N° Réclamation', 'N° Splitter', 'Zone']).splitterCol).toBe('N° Splitter');
+    expect(detectHeaders(['Ticket', 'SPLITTER']).splitterCol).toBe('SPLITTER');
+    expect(detectHeaders(['Ticket', 'Coupleur']).splitterCol).toBe('Coupleur');
+  });
+
   it('ne reconnaît pas un mot à l\'intérieur d\'un autre (« tel » dans « Hôtel »)', () => {
     expect(detectHeaders(['Hôtel']).clientPhoneCol).toBeUndefined();
   });
@@ -197,6 +203,21 @@ describe('interpretRows', () => {
     const [r] = interpretRows([row({ 'Zone MSAN': 'Agdal' })], detected, ctx);
     expect(r.isValid).toBe(false);
     expect(r.rejectionReason).toMatch(/\[Rabat\]/);
+  });
+
+  it('lit et uniformise le numéro de splitter (vide = pas de splitter)', () => {
+    const withSplitter = detectHeaders(['N° Réclamation', 'Code Client', 'Zone MSAN', 'Splitter']);
+    const rows = interpretRows(
+      [
+        { 'N° Réclamation': 'R1', 'Code Client': 'C1', 'Zone MSAN': 'Maarif Centre', 'Splitter': ' sp-12 ' },
+        { 'N° Réclamation': 'R2', 'Code Client': 'C2', 'Zone MSAN': 'Maarif Centre', 'Splitter': '' },
+        { 'N° Réclamation': 'R3', 'Code Client': 'C3', 'Zone MSAN': 'Maarif Centre', 'Splitter': '-' },
+      ],
+      withSplitter,
+      ctx
+    );
+    expect(rows.map(r => r.splitterRef)).toEqual(['SP-12', undefined, undefined]);
+    expect(rows.every(r => r.isValid)).toBe(true);
   });
 
   it('accepte une zone inconnue (le ticket ira en « zone à rattacher »)', () => {

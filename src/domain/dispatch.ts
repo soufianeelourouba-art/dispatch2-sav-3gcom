@@ -1,5 +1,6 @@
 // Pure dispatch rules: which technician should receive each ticket.
 import type { DispatchProposal, Technician, Ticket } from '../types';
+import { splitterKey } from './splitter';
 
 export interface DispatchSimulationResult {
   proposals: DispatchProposal[];
@@ -10,6 +11,7 @@ export interface DispatchSimulationResult {
     secondVisitCount: number;
     sameTechCount: number;
     differentTechCount: number;
+    splitterGroupedCount: number;
   };
 }
 
@@ -18,6 +20,7 @@ export const DAILY_LOAD_WARNING = 6;
 
 /**
  * Computes the proposed dispatch according to the validated 4-level priority rules:
+ * Level 0: Incident splitter (same technician for all tickets of a splitter)
  * Level 1: Deuxième visite (Same tech if external failure / client unreachable / RDV; Different tech if technical / GC)
  * Level 2: Zone technique MSAN coverage
  * Level 3: Workload balancing (least open tickets)
@@ -58,7 +61,34 @@ export function computeDispatchProposals(
   let sameTechCount = 0;
   let differentTechCount = 0;
 
-  ticketsToDispatch.forEach(ticket => {
+  // Splitter incidents: one technician for every ticket of the same splitter. Open tickets
+  // already assigned on a splitter set the technician for newly arrived ones.
+  const splitterTech = new Map<string, string>();
+  existingTickets.forEach(t => {
+    const key = splitterKey(t);
+    if (key && !t.isClosed && t.currentAssignedTechId && workloadMap[t.currentAssignedTechId] !== undefined) {
+      splitterTech.set(key, t.currentAssignedTechId);
+    }
+  });
+  let splitterGroupedCount = 0;
+
+  const decide = (ticket: Ticket) => {
+    const key = splitterKey(ticket);
+    const groupTech = key ? sectorTechs.find(t => t.id === splitterTech.get(key)) : undefined;
+    if (groupTech) {
+      splitterGroupedCount++;
+      workloadMap[groupTech.id]++;
+      proposals.push({
+        ticketId: ticket.id,
+        technicianId: groupTech.id,
+        technicianName: groupTech.fullName,
+        rationale: `Incident splitter ${ticket.splitterRef} : même technicien (${groupTech.fullName}) pour tous les clients de ce splitter.`,
+        isSecondVisit: ticket.visitCount > 1,
+        priorityScore: 110,
+      });
+      return;
+    }
+
     if (!ticket.technicalZoneId) {
       proposals.push({
         ticketId: ticket.id,
@@ -152,6 +182,15 @@ export function computeDispatchProposals(
       isSecondVisit,
       priorityScore: 50,
     });
+  };
+
+  ticketsToDispatch.forEach(ticket => {
+    decide(ticket);
+    const key = splitterKey(ticket);
+    const decided = proposals[proposals.length - 1];
+    if (key && decided.technicianId && !splitterTech.has(key)) {
+      splitterTech.set(key, decided.technicianId);
+    }
   });
 
   const assignedCount = proposals.filter(p => p.technicianId !== null).length;
@@ -166,6 +205,7 @@ export function computeDispatchProposals(
       secondVisitCount,
       sameTechCount,
       differentTechCount,
+      splitterGroupedCount,
     },
   };
 }

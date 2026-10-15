@@ -4,6 +4,9 @@ import { store } from '../../services/storage';
 import { formatCasablancaDateTime, formatCasablancaTimeOnly, formatSLADisplay } from '../../domain/format';
 import { exportTicketsToExcel } from '../../services/excelExporter';
 import { LitigeResolutionModal } from './LitigeResolutionModal';
+import { SplitterBadge, ManualTicketBadge } from '../tickets/TicketBadges';
+import { SplitterIncidentsPanel } from '../tickets/SplitterIncidentsPanel';
+import { splitterKey, groupBySplitter } from '../../domain/splitter';
 import { 
   Clock, 
   AlertTriangle, 
@@ -88,8 +91,22 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
     });
   }, [technicians, tickets]);
 
+  const [splitterFilter, setSplitterFilter] = useState<string | null>(null);
+  const splitterGroupSize = useMemo(() => {
+    const sizes = new Map<string, number>();
+    groupBySplitter(tickets).forEach(g => sizes.set(g.key, g.openCount));
+    return (ticket: Ticket) => {
+      const key = splitterKey(ticket);
+      return key ? sizes.get(key) || 1 : 1;
+    };
+  }, [tickets]);
+
   const filteredTickets = useMemo(() => {
     let list = [...tickets];
+
+    if (splitterFilter) {
+      list = list.filter(t => t.splitterRef === splitterFilter);
+    }
 
     // SLA filter
     if (slaFilter === 'OVERDUE') {
@@ -119,16 +136,24 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
         t.ticketNumber.toLowerCase().includes(q) ||
         t.clientName.toLowerCase().includes(q) ||
         t.clientPhone.toLowerCase().includes(q) ||
-        t.rawZoneText.toLowerCase().includes(q)
+        t.rawZoneText.toLowerCase().includes(q) ||
+        (t.splitterRef || '').toLowerCase().includes(q) ||
+        (t.description || '').toLowerCase().includes(q)
       );
     }
 
-    // Prioritize HD (expired) first, then critical, then normal
+    // Open first, splitter incidents grouped on top, then HD (expired), critical, normal
     return list.sort((a, b) => {
       if (a.isClosed !== b.isClosed) return a.isClosed ? 1 : -1;
+      const ga = splitterGroupSize(a), gb = splitterGroupSize(b);
+      if (ga !== gb) return gb - ga;
+      if (ga > 1) {
+        const byKey = (splitterKey(a) || '').localeCompare(splitterKey(b) || '');
+        if (byKey !== 0) return byKey;
+      }
       return a.slaRemainingHours - b.slaRemainingHours;
     });
-  }, [tickets, slaFilter, selectedStatusFilter, selectedTechFilter, searchQuery]);
+  }, [tickets, slaFilter, selectedStatusFilter, selectedTechFilter, searchQuery, splitterFilter, splitterGroupSize]);
 
   const handleExport = () => {
     exportTicketsToExcel(filteredTickets, `suivi_interventions_${currentUser.sectorId || 'secteur'}.xlsx`);
@@ -304,6 +329,20 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
         </button>
       </div>
 
+      <SplitterIncidentsPanel
+        tickets={tickets}
+        technicians={technicians}
+        sectors={userSectors}
+        onSelectSplitter={ref => setSplitterFilter(ref)}
+      />
+
+      {splitterFilter && (
+        <div className="flex items-center justify-between gap-3 bg-brand-orange-50 border border-brand-orange-400/50 px-4 py-2.5 rounded-xl text-xs">
+          <span className="font-semibold text-slate-800">Filtre : tickets du splitter <b className="font-mono">{splitterFilter}</b></span>
+          <button onClick={() => setSplitterFilter(null)} className="font-bold text-brand-orange-600 hover:underline">Retirer le filtre</button>
+        </div>
+      )}
+
       {/* Active Filter Reminder with Reset */}
       {slaFilter !== 'ALL' && (
         <div className="bg-slate-100 border border-slate-300 p-3 rounded-xl flex items-center justify-between text-xs text-slate-700">
@@ -450,6 +489,7 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
             <div
               key={ticket.id}
               className={`bg-white rounded-2xl border p-5 shadow-xs transition-all hover:shadow-md ${
+                splitterGroupSize(ticket) > 1 && !ticket.isClosed ? 'border-brand-orange-400 border-l-4' :
                 ticket.currentStatus === 'LITIGE' ? 'border-rose-300' : 'border-slate-200/90'
               }`}
             >
@@ -484,7 +524,14 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                        ticket.currentStatus === 'REOPENED' ? '🔄 Réouvert (En cours)' :
                        'Transmis'}
                     </span>
+
+                    <SplitterBadge ticket={ticket} groupSize={splitterGroupSize(ticket)} />
+                    <ManualTicketBadge ticket={ticket} />
                   </div>
+
+                  {ticket.description && (
+                    <div className="text-xs text-violet-900 bg-violet-50 rounded-lg px-2.5 py-1.5">📝 {ticket.description}</div>
+                  )}
 
                   <div className="text-xs">
                     <span className="font-bold text-slate-900 text-sm">{ticket.clientName}</span>

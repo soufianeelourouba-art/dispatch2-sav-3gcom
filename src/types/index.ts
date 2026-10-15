@@ -128,8 +128,20 @@ export const LITIGE_REASONS: LitigeDef[] = [
 // Compatibility alias
 export const FAILURE_REASONS = LITIGE_REASONS;
 
-export type EventType = 
+// Ticket created in the app by an orienteur for an incident without an operator ticket
+// (kept for follow-up and billing).
+export type ManualTicketNature = 'URGENT_SPLITTER' | 'URGENT_CLIENT' | 'FIABILISATION' | 'AUTRE';
+
+export const MANUAL_TICKET_NATURES: { code: ManualTicketNature; label: string; description: string }[] = [
+  { code: 'URGENT_SPLITTER', label: 'Incident splitter urgent', description: 'Splitter en panne touchant plusieurs clients, sans ticket opérateur.' },
+  { code: 'URGENT_CLIENT', label: 'Client urgent', description: 'Intervention urgente demandée pour un client (entreprise, VIP…).' },
+  { code: 'FIABILISATION', label: 'Fiabilisation', description: 'Remise en état préventive du réseau (boîtier, câblage, étiquetage…).' },
+  { code: 'AUTRE', label: 'Autre intervention', description: 'Toute autre intervention hors ticket à suivre et facturer.' },
+];
+
+export type EventType =
   | 'IMPORT'
+  | 'MANUAL_CREATED'
   | 'PROPOSED'
   | 'ASSIGNED'
   | 'REASSIGNED'
@@ -216,6 +228,16 @@ export interface Ticket {
   // Reopen update by dispatcher
   lastDispatcherUpdateNotes?: string;
   reopenedWithNewPhone?: string;
+
+  // Splitter shared by several clients: tickets of the same splitter (and sector) are one
+  // collective incident, handled by one technician and closed together.
+  splitterRef?: string;
+
+  // Origin: imported operator ticket (default) or created in the app (hors ticket, billable)
+  origin?: 'IMPORT' | 'MANUAL';
+  manualNature?: ManualTicketNature;
+  description?: string;
+  createdByName?: string;
 
   createdAt: string;
   updatedAt: string;

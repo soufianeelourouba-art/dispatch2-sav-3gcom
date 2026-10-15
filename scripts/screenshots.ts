@@ -15,7 +15,8 @@ mkdirSync(outDir, { recursive: true });
 
 const auth = getAuth();
 const db = getFirestore();
-const SECTOR = 'sec-cas-centre';
+// Read-only: the temporary orienteur is attached to the first existing sector; nothing else is written.
+const SECTOR = (await db.collection('sectors').limit(1).get()).docs[0]?.id || 'none';
 
 async function tempAccount(role: 'MANAGER' | 'DISPATCHER') {
   const email = `screens-${role.toLowerCase()}-${randomBytes(3).toString('hex')}@example.invalid`;
@@ -85,6 +86,14 @@ try {
         await page.getByRole('navigation').filter({ visible: true }).getByRole('button', { name: label, exact: true }).click();
         await page.waitForTimeout(800);
         await page.screenshot({ path: join(outDir, `${role === 'MANAGER' ? '1' : '2'}-${id}-${device}.png`), fullPage: device === 'desktop' });
+      }
+      // "Créer un ticket" dialog, opened then closed without submitting
+      if (role === 'DISPATCHER') {
+        await page.getByRole('navigation').filter({ visible: true }).getByRole('button', { name: 'Dispatch du jour', exact: true }).click();
+        await page.getByRole('button', { name: 'Créer un ticket' }).click();
+        await page.waitForTimeout(500);
+        await page.screenshot({ path: join(outDir, `3-creer-ticket-${device}.png`) });
+        await page.getByRole('button', { name: 'Annuler' }).click();
       }
       await context.close();
     }

@@ -2,6 +2,7 @@
 // No Firebase or XLSX dependency, so every rule here is unit-tested.
 import type { Sector, TechnicalZone, ZoneAlias } from '../types';
 import { moroccoOffsetMs, moroccoToUtc } from './moroccoTime';
+import { normalizeSplitterRef } from './splitter';
 
 export const COLUMN_ALIASES = {
   ticketNumber: [
@@ -29,6 +30,10 @@ export const COLUMN_ALIASES = {
     'zone technique', 'zone', 'msan', 'repartiteur', 'répartiteur', 'zone msan',
     'central', 'secteur technique', 'msan code', 'nom msan', 'zone intervention'
   ],
+  splitter: [
+    'splitter', 'n° splitter', 'num splitter', 'numero splitter', 'numéro splitter', 'code splitter',
+    'ref splitter', 'référence splitter', 'id splitter', 'splitter id', 'coupleur', 'n° coupleur'
+  ],
   registeredAt: [
     'date d\'enregistrement', 'date enregistrement', 'date réclamation', 'date reclamation',
     'date création', 'date creation', 'date', 'date heure', 'date ouverture', 'horodatage'
@@ -44,6 +49,7 @@ export interface DetectedColumns {
   clientPhoneCol?: string;
   clientAddressCol?: string;
   zoneTextCol?: string;
+  splitterCol?: string;
   registeredAtCol?: string;
 }
 
@@ -169,6 +175,7 @@ export interface InterpretedRow {
   clientPhone: string;
   clientAddress: string;
   rawZoneText: string;
+  splitterRef?: string;
   resolvedZoneId?: string;
   resolvedZoneLabel?: string;
   resolvedSectorId?: string;
@@ -227,6 +234,7 @@ export function interpretRows(
     const clientPhone = detected.clientPhoneCol ? normalizePhone(row[detected.clientPhoneCol]) : '';
     const clientAddress = cell(row, detected.clientAddressCol);
     const rawZoneText = cell(row, detected.zoneTextCol);
+    const splitterRef = detected.splitterCol ? normalizeSplitterRef(row[detected.splitterCol]) : undefined;
     const rawDate = detected.registeredAtCol ? row[detected.registeredAtCol] : '';
 
     let isValid = true;
@@ -268,6 +276,7 @@ export function interpretRows(
       clientPhone,
       clientAddress,
       rawZoneText: rawZoneText || 'NON_SPECIFIE',
+      splitterRef,
       resolvedZoneId: zone.zoneId,
       resolvedZoneLabel: zone.zoneLabel,
       resolvedSectorId: ctx.targetSectorId,

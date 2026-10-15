@@ -1,10 +1,17 @@
 import * as XLSX from 'xlsx';
-import { Ticket, Technician, Sector } from '../types';
+import { Ticket, Technician, MANUAL_TICKET_NATURES } from '../types';
 import { formatCasablancaDateTime } from '../domain/format';
+import { store } from './storage';
 
 export function exportTicketsToExcel(tickets: Ticket[], fileName: string = 'tickets_3gcom.xlsx') {
+  const techName = (id?: string) => (id ? store.getTechnicians().find(tech => tech.id === id)?.fullName : undefined);
   const rows = tickets.map(t => ({
     'N° Réclamation': t.ticketNumber,
+    'Origine': t.origin === 'MANUAL' ? 'Hors ticket (à facturer)' : 'Ticket opérateur',
+    'Nature': t.origin === 'MANUAL' ? MANUAL_TICKET_NATURES.find(n => n.code === t.manualNature)?.label || '' : '',
+    'Description': t.description || '',
+    'Créé par': t.createdByName || '',
+    'Splitter': t.splitterRef || '',
     'Code Client': t.clientNumber,
     'Nom Client': t.clientName,
     'Téléphone': t.clientPhone,
@@ -13,7 +20,7 @@ export function exportTicketsToExcel(tickets: Ticket[], fileName: string = 'tick
     'Statut Actuel': translateStatus(t.currentStatus),
     'SLA 24h': t.slaStatus === 'EXPIRED' ? `DÉPASSÉ (${t.slaRemainingHours}h)` : `CONFORME (reste ${t.slaRemainingHours}h)`,
     'Passage / Visites': t.visitCount,
-    'Technicien Affecté': t.lastVisitedTechName || t.proposedTechId || 'Non assigné',
+    'Technicien Affecté': techName(t.currentAssignedTechId) || t.lastVisitedTechName || 'Non assigné',
     'Litige / Motif': t.lastLitigeReasonLabel || t.lastFailureReasonLabel || 'N/A',
     'Clôture NF': t.currentStatus === 'COMPLETED' ? (t.nfType === 'CENTRAL_CONFIG' ? `Config Centrale (ONT: ${t.ontSerialNumber || ''})` : 'Standard') : 'Non clôturé',
     'Longueur Câble (m)': t.cableLengthMeters || 0,

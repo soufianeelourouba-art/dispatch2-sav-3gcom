@@ -2,7 +2,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { store } from '../../services/storage';
 import { formatCasablancaDateTime, formatCasablancaTimeOnly, formatSLADisplay } from '../../domain/format';
 import { exportTicketsToExcel, exportTechnicianMatrixToExcel } from '../../services/excelExporter';
-import { Ticket, Technician, Sector } from '../../types';
+import { Ticket, Technician, Sector, MANUAL_TICKET_NATURES } from '../../types';
+import { SplitterIncidentsPanel } from '../tickets/SplitterIncidentsPanel';
+import { ManualTicketModal } from '../tickets/ManualTicketModal';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -25,7 +27,9 @@ import {
   ExternalLink,
   ShieldAlert,
   Phone,
-  Trash2
+  Trash2,
+  Wrench,
+  Plus
 } from 'lucide-react';
 
 interface ManagerDashboardViewProps {
@@ -38,6 +42,8 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
   const [selectedSectorFilter, setSelectedSectorFilter] = useState<string>('ALL');
   const [activeAlertCategory, setActiveAlertCategory] = useState<'ALL' | 'OVERDUE' | 'CRITICAL' | 'LITIGES' | 'OVERLOAD'>('ALL');
   const [alertSearchQuery, setAlertSearchQuery] = useState<string>('');
+  const [isManualTicketOpen, setIsManualTicketOpen] = useState(false);
+  const currentUser = store.getCurrentUser();
   const [, setStoreVersion] = useState(0);
 
   // Subscribe directly to store for real-time reactivity
@@ -178,6 +184,14 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
     exportTicketsToExcel(scopedTickets, `${prefix}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  // Interventions created in the app (no operator ticket): followed and billed separately
+  const manualTickets = useMemo(() => scopedTickets.filter(t => t.origin === 'MANUAL'), [scopedTickets]);
+
+  const handleExportManual = () => {
+    const prefix = selectedSector ? selectedSector.code.toLowerCase() : 'royaume';
+    exportTicketsToExcel(manualTickets, `interventions_hors_ticket_${prefix}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const handleExportTechs = () => {
     exportTechnicianMatrixToExcel(scopedTechs, scopedTickets, `matrice_techniciens_${selectedSector ? selectedSector.code.toLowerCase() : 'national'}.xlsx`);
   };
@@ -211,6 +225,14 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button
+            onClick={() => setIsManualTicketOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-violet-800 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 transition-colors shadow-xs cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Créer un ticket</span>
+          </button>
+
           <button
             onClick={handleClearAllTickets}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl hover:bg-rose-100 transition-colors shadow-xs cursor-pointer"
@@ -361,6 +383,38 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
           <span className="text-[11px] text-slate-500 block mt-1">Taux de respect SLA : <b>{kpiSlaComplianceRate}</b></span>
         </div>
       </div>
+
+      <SplitterIncidentsPanel tickets={scopedTickets} technicians={allTechs} sectors={allSectors} />
+
+      {/* Interventions hors ticket (à facturer) */}
+      <div className="bg-white rounded-2xl border border-violet-200 shadow-xs p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center shrink-0">
+            <Wrench className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Interventions hors ticket (à facturer) : {manualTickets.length}</h2>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-slate-600">
+              {MANUAL_TICKET_NATURES.map(n => (
+                <span key={n.code}>{n.label} : <b>{manualTickets.filter(t => t.manualNature === n.code).length}</b></span>
+              ))}
+              <span className="text-emerald-700">Clôturées (NF) : <b>{manualTickets.filter(t => t.currentStatus === 'COMPLETED').length}</b></span>
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={handleExportManual}
+          disabled={manualTickets.length === 0}
+          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-violet-800 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-40 transition-colors shrink-0"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>Exporter pour facturation</span>
+        </button>
+      </div>
+
+      {currentUser && (
+        <ManualTicketModal isOpen={isManualTicketOpen} currentUser={currentUser} onClose={() => setIsManualTicketOpen(false)} />
+      )}
 
       {/* Operational Alerts Section (§3: "voir des alertes") */}
       <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">

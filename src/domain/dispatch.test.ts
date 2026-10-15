@@ -90,6 +90,37 @@ describe('computeDispatchProposals — cas standard', () => {
   });
 });
 
+describe('computeDispatchProposals — incident splitter', () => {
+  it('envoie tous les tickets d\'un même splitter au même technicien', () => {
+    const tickets = [
+      ticket('S1', { splitterRef: 'SP-7' }),
+      ticket('S2', { splitterRef: 'SP-7' }),
+      ticket('S3', { splitterRef: 'SP-7' }),
+      ticket('N1'),
+    ];
+    const { proposals, stats } = computeDispatchProposals(tickets, [ali, badr], [], 'sec-casa');
+    const bySplitter = proposals.slice(0, 3).map(p => p.technicianId);
+    expect(new Set(bySplitter).size).toBe(1);
+    expect(stats.splitterGroupedCount).toBe(2);
+    // the load of the splitter counts: the next ticket goes to the other technician
+    expect(proposals[3].technicianId).not.toBe(bySplitter[0]);
+  });
+
+  it('rattache un nouveau ticket au technicien déjà en intervention sur ce splitter', () => {
+    const enCours = ticket('OLD', { splitterRef: 'SP-7', currentAssignedTechId: 't-badr', currentStatus: 'ASSIGNED' });
+    const { proposals } = computeDispatchProposals([ticket('NEW', { splitterRef: 'SP-7' })], [ali, badr], [enCours, ...openAssigned('t-badr', 5)], 'sec-casa');
+    expect(proposals[0]).toMatchObject({ technicianId: 't-badr', priorityScore: 110 });
+    expect(proposals[0].rationale).toMatch(/splitter SP-7/);
+  });
+
+  it('ignore un splitter clôturé ou d\'un autre secteur', () => {
+    const clos = ticket('OLD', { splitterRef: 'SP-7', currentAssignedTechId: 't-badr', isClosed: true });
+    const autreSecteur = ticket('OLD2', { splitterRef: 'SP-7', sectorId: 'sec-rabat', currentAssignedTechId: 't-badr' });
+    const { proposals } = computeDispatchProposals([ticket('NEW', { splitterRef: 'SP-7' })], [ali, badr], [clos, autreSecteur], 'sec-casa');
+    expect(proposals[0].priorityScore).toBe(50);
+  });
+});
+
 describe('computeDispatchProposals — deuxième visite', () => {
   it('cause externe (client injoignable) : reconduit le même technicien même s\'il est plus chargé', () => {
     const t = ticket('T1', { visitCount: 2, lastLitigeReasonCode: 'CLIENT_UNREACHABLE', lastVisitedTechName: 'Ali' });

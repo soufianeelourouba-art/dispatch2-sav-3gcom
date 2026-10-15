@@ -1,11 +1,13 @@
 // Technician mobile portal (no account): the secret activation token is the credential.
 // GET  /api/portal?token=act_…  → technician name + open tickets assigned to them
-// POST /api/portal { token, ticketId, report } → records an NF or a litige
+// POST /api/portal { token, ticketId, report, scope? } → records an NF or a litige
+//      (scope "SPLITTER": on every open ticket of the same splitter)
 import { json, handleError, HttpError } from './_lib/http.js';
 import {
   AccessError,
   findTechnicianByToken,
   openTicketsOf,
+  recordSplitterReport,
   recordTechnicianReport,
   technicianIsBlocked,
   type TechnicianReport,
@@ -36,6 +38,10 @@ export async function GET(request: Request): Promise<Response> {
       currentStatus: t.currentStatus,
       lastLitigeReasonLabel: t.lastLitigeReasonLabel,
       lastDispatcherUpdateNotes: t.lastDispatcherUpdateNotes,
+      splitterRef: t.splitterRef,
+      origin: t.origin,
+      manualNature: t.manualNature,
+      description: t.description,
     }));
     return json({ technician: { fullName: tech.fullName }, suspended: false, tickets });
   } catch (err) {
@@ -72,8 +78,12 @@ export async function POST(request: Request): Promise<Response> {
     if (technicianIsBlocked(tech)) throw new HttpError(403, 'Accès suspendu');
     if (typeof body?.ticketId !== 'string') throw new HttpError(400, 'ticketId manquant');
     try {
-      const ticket = await recordTechnicianReport(tech, body.ticketId, parseReport(body.report));
-      return json({ ticketNumber: ticket.ticketNumber, status: ticket.currentStatus });
+      const report = parseReport(body.report);
+      // scope "SPLITTER": one report closes every open ticket of the splitter incident
+      const tickets = body.scope === 'SPLITTER'
+        ? await recordSplitterReport(tech, body.ticketId, report)
+        : [await recordTechnicianReport(tech, body.ticketId, report)];
+      return json({ ticketNumbers: tickets.map(t => t.ticketNumber), status: tickets[0].currentStatus });
     } catch (err) {
       if (err instanceof AccessError) throw new HttpError(409, err.message);
       throw err;
