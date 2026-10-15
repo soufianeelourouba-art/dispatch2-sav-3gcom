@@ -46,16 +46,14 @@ export default function App() {
     store.logout();
   };
 
-  // Check URL query parameters for mobile technician portal (?tech=... or ?act=...)
+  // Mobile technician portal, opened with the technician's secret link (?act=...)
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const techParam = urlParams?.get('tech');
   const actParam = urlParams?.get('act') || urlParams?.get('start');
 
-  if (techParam || actParam) {
+  if (actParam) {
     return (
       <TechnicianMobilePortal
-        technicianId={techParam || undefined}
-        activationToken={actParam || undefined}
+        activationToken={actParam}
         onExitPortal={() => {
           window.history.replaceState({}, document.title, window.location.pathname);
           setVersion(v => v + 1);

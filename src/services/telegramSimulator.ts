@@ -1,5 +1,6 @@
 import { Ticket, TicketEvent, EventType, LitigeReasonCode } from '../types';
 import { store } from './storage';
+import { formatTicketMessage } from '../domain/tickets';
 
 export interface TelegramOutboundMessage {
   id: string;
@@ -50,35 +51,7 @@ class TelegramGatewayService {
   }
 
   public queueTicketDispatch(ticket: Ticket, technicianId: string, technicianName: string) {
-    const isSecondVisit = ticket.visitCount > 1;
-    
-    let historyBanner = '';
-    if (isSecondVisit) {
-      historyBanner = `\n\n⚠️ <b>DEUXIÈME VISITE (SAV RÉCLAMATION)</b>\n` +
-        `• Précédent échec : ${ticket.lastLitigeReasonLabel || 'Litige précédent'}\n` +
-        `• Ancien technicien : ${ticket.lastVisitedTechName || 'Non précisé'}`;
-    }
-
-    let reopenBanner = '';
-    if (ticket.lastDispatcherUpdateNotes) {
-      reopenBanner = `\n\n🔄 <b>MISE À JOUR DE L'ORIENTEUR :</b>\n` +
-        `"${ticket.lastDispatcherUpdateNotes}"\n` +
-        (ticket.reopenedWithNewPhone ? `📞 Nouveau contact : <b>${ticket.reopenedWithNewPhone}</b>\n` : '');
-    }
-
-    const messageText = 
-      `🚨 <b>INTERVENTION FIBRE OPTIQUE 3GCOM</b>\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `📋 <b>Ticket :</b> ${ticket.ticketNumber}\n` +
-      `👤 <b>Abonné :</b> ${ticket.clientName} (Réf : ${ticket.clientNumber})\n` +
-      `📞 <b>Téléphone :</b> ${ticket.clientPhone}\n` +
-      `📍 <b>Adresse :</b> ${ticket.clientAddress}\n` +
-      `🏢 <b>Zone MSAN :</b> ${ticket.rawZoneText}` +
-      historyBanner +
-      reopenBanner +
-      `\n━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `<i>Répondez directement avec l'un des deux boutons :</i>\n` +
-      `[🟢 NF] ou [🔴 Litige (LC)]`;
+    const messageText = formatTicketMessage(ticket);
 
     const msg: TelegramOutboundMessage = {
       id: `tg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -94,7 +67,7 @@ class TelegramGatewayService {
 
     this.queue.unshift(msg);
     this.notify();
-    // Real Telegram delivery is done server-side (webhook function), never from the browser.
+    // Real Telegram delivery is done by the server (/api/notify), never from the browser.
   }
 
   private flushQueue() {

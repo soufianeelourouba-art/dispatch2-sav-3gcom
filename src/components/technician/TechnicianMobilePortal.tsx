@@ -1,92 +1,131 @@
-import React, { useState, useEffect } from 'react';
-import { Technician, Ticket, LITIGE_REASONS, LitigeReasonCode } from '../../types';
-import { store, formatCasablancaDateTime, formatCasablancaTimeOnly } from '../../services/storage';
-import { 
-  CheckCircle2, 
-  AlertTriangle, 
-  MapPin, 
-  Phone, 
-  Clock, 
-  ShieldCheck, 
-  Send, 
-  ArrowLeft, 
-  Check, 
-  Ruler, 
-  Cpu, 
+import React, { useState, useEffect, useCallback } from 'react';
+import { LITIGE_REASONS, LitigeReasonCode } from '../../types';
+import {
+  CheckCircle2,
+  AlertTriangle,
+  MapPin,
+  Phone,
+  Send,
+  Check,
+  Ruler,
+  Cpu,
   AlertCircle,
-  ExternalLink
 } from 'lucide-react';
 
+// Technician portal: no account, the secret activation token (?act=…) is the credential.
+// All reads and writes go through /api/portal, which only exposes this technician's open tickets.
+interface PortalTicket {
+  id: string;
+  ticketNumber: string;
+  clientName: string;
+  clientNumber: string;
+  clientPhone: string;
+  clientAddress: string;
+  rawZoneText: string;
+  currentStatus: string;
+}
+
 interface TechnicianMobilePortalProps {
-  technicianId?: string;
-  activationToken?: string;
+  activationToken: string;
   onExitPortal?: () => void;
 }
 
+const REFRESH_MS = 20000;
+
 export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
-  technicianId,
   activationToken,
   onExitPortal,
 }) => {
-  const [tech, setTech] = useState<Technician | null>(null);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+  const [loadState, setLoadState] = useState<'LOADING' | 'OK' | 'INVALID' | 'SUSPENDED' | 'OFFLINE'>('LOADING');
+  const [tech, setTech] = useState<{ fullName: string } | null>(null);
+  const [tickets, setTickets] = useState<PortalTicket[]>([]);
+  const [activeTicket, setActiveTicket] = useState<PortalTicket | null>(null);
   const [actionType, setActionType] = useState<'NONE' | 'NF' | 'LITIGE'>('NONE');
-  
+
   // NF form
   const [cableLength, setCableLength] = useState<number>(45);
-  const [ontSerial, setOntSerial] = useState<string>('ALCL' + Math.floor(100000 + Math.random() * 900000));
+  const [ontSerial, setOntSerial] = useState<string>('');
   const [nfNotes, setNfNotes] = useState<string>('');
 
   // Litige form
   const [litigeReason, setLitigeReason] = useState<LitigeReasonCode>('CLIENT_UNREACHABLE');
   const [litigeNotes, setLitigeNotes] = useState<string>('');
+  const [rdvDateTime, setRdvDateTime] = useState<string>('');
 
   const [notificationMsg, setNotificationMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/portal?token=${encodeURIComponent(activationToken)}`);
+      if (res.status === 404) return setLoadState('INVALID');
+      if (!res.ok) return setLoadState(prev => (prev === 'OK' ? 'OK' : 'OFFLINE'));
+      const data = await res.json();
+      setTech(data.technician);
+      setTickets(data.tickets);
+      setLoadState(data.suspended ? 'SUSPENDED' : 'OK');
+    } catch {
+      setLoadState(prev => (prev === 'OK' ? 'OK' : 'OFFLINE'));
+    }
+  }, [activationToken]);
+
   useEffect(() => {
-    const updateData = () => {
-      const allTechs = store.getTechnicians();
-      let matchedTech: Technician | undefined;
+    load();
+    const timer = setInterval(load, REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [load]);
 
-      if (activationToken) {
-        matchedTech = allTechs.find(t => t.telegramActivationToken === activationToken);
-        if (matchedTech && matchedTech.telegramActivationStatus !== 'ACTIVATED') {
-          // Auto activate
-          store.updateTechnician(matchedTech.id, {
-            telegramActivationStatus: 'ACTIVATED',
-            telegramActivatedAt: new Date().toISOString(),
-          });
-        }
-      } else if (technicianId) {
-        matchedTech = allTechs.find(t => t.id === technicianId);
+  const flash = (type: 'success' | 'error', text: string) => {
+    setNotificationMsg({ type, text });
+    setTimeout(() => setNotificationMsg(null), 5000);
+  };
+
+  const submitReport = async (report: Record<string, unknown>, successText: string) => {
+    if (!activeTicket) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: activationToken, ticketId: activeTicket.id, report }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        flash('error', data.error || 'Envoi impossible, réessayez.');
+        return;
       }
+      setActionType('NONE');
+      setActiveTicket(null);
+      flash('success', successText);
+      load();
+    } catch {
+      flash('error', 'Pas de connexion Internet. Réessayez dans un instant.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-      if (matchedTech) {
-        setTech(matchedTech);
-        const allTickets = store.getTickets();
-        const techTickets = allTickets.filter(
-          t => t.currentAssignedTechId === matchedTech!.id && !t.isClosed
-        );
-        setTickets(techTickets);
-      }
-    };
+  if (loadState === 'LOADING') {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-400 flex items-center justify-center text-sm">
+        Chargement de vos interventions…
+      </div>
+    );
+  }
 
-    updateData();
-    const unsubscribe = store.subscribe(updateData);
-    return () => unsubscribe();
-  }, [technicianId, activationToken]);
-
-  if (!tech) {
+  if (loadState === 'INVALID' || loadState === 'OFFLINE' || !tech) {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center">
         <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mb-4">
           <AlertTriangle className="w-8 h-8" />
         </div>
-        <h1 className="text-xl font-bold">Lien Technicien Invalide ou Expiré</h1>
+        <h1 className="text-xl font-bold">
+          {loadState === 'OFFLINE' ? 'Connexion impossible' : 'Lien Technicien Invalide ou Expiré'}
+        </h1>
         <p className="text-sm text-slate-400 mt-2 max-w-sm">
-          Le lien que vous avez utilisé n'est plus actif. Contactez votre superviseur 3GCOM pour recevoir un nouveau lien.
+          {loadState === 'OFFLINE'
+            ? 'Vérifiez votre connexion Internet puis rechargez la page.'
+            : 'Le lien que vous avez utilisé n\'est plus actif. Contactez votre superviseur 3GCOM pour recevoir un nouveau lien.'}
         </p>
         {onExitPortal && (
           <button
@@ -100,7 +139,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
     );
   }
 
-  if (tech.telegramLinkDisabled || tech.telegramActivationStatus === 'REVOKED') {
+  if (loadState === 'SUSPENDED') {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center">
         <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mb-4">
@@ -125,53 +164,30 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
   const handleCloseNF = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTicket) return;
-
-    setIsSubmitting(true);
-    setTimeout(() => {
-      store.submitNF({
-        ticketId: activeTicket.id,
-        technicianId: tech.id,
-        technicianName: tech.fullName,
+    submitReport(
+      {
+        kind: 'NF',
         nfType: 'STANDARD',
         ontSerialNumber: ontSerial.trim().toUpperCase(),
-        cableLengthMeters: Number(cableLength) || 45,
-        notes: nfNotes.trim() || 'Raccordement vertical validé et test de signal conforme (-19 dBm).',
-      });
-
-      setIsSubmitting(false);
-      setActionType('NONE');
-      setActiveTicket(null);
-      setNotificationMsg({
-        type: 'success',
-        text: `Ticket ${activeTicket.ticketNumber} clôturé NF avec succès ! L'orienteur a reçu la confirmation en direct.`,
-      });
-      setTimeout(() => setNotificationMsg(null), 5000);
-    }, 400);
+        cableLengthMeters: Number(cableLength) || undefined,
+        notes: nfNotes.trim() || undefined,
+      },
+      `Ticket ${activeTicket.ticketNumber} clôturé NF. L'orienteur a reçu la confirmation en direct.`
+    );
   };
 
   const handleReportLitige = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTicket) return;
-
-    setIsSubmitting(true);
-    setTimeout(() => {
-      store.reportLitige({
-        ticketId: activeTicket.id,
-        technicianId: tech.id,
-        technicianName: tech.fullName,
+    submitReport(
+      {
+        kind: 'LITIGE',
         reasonCode: litigeReason,
-        notes: litigeNotes.trim() || 'Blocage signalé sur place.',
-      });
-
-      setIsSubmitting(false);
-      setActionType('NONE');
-      setActiveTicket(null);
-      setNotificationMsg({
-        type: 'success',
-        text: `Litige signalé pour le ticket ${activeTicket.ticketNumber}. L'orienteur est immédiatement alerté.`,
-      });
-      setTimeout(() => setNotificationMsg(null), 5000);
-    }, 400);
+        rdvDateTime: litigeReason === 'RDV' ? rdvDateTime : undefined,
+        notes: litigeNotes.trim(),
+      },
+      `Litige signalé pour le ticket ${activeTicket.ticketNumber}. L'orienteur est immédiatement alerté.`
+    );
   };
 
   return (
@@ -213,7 +229,9 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
                 : 'bg-rose-950/80 border border-rose-700/80 text-rose-200'
             }`}
           >
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            {notificationMsg.type === 'success'
+              ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              : <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
             <span>{notificationMsg.text}</span>
           </div>
         )}
@@ -328,6 +346,21 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
                 </select>
               </div>
 
+              {litigeReason === 'RDV' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Date et heure du RDV *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={rdvDateTime}
+                    onChange={e => setRdvDateTime(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
                   Détails du problème constaté *
@@ -361,7 +394,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
               Interventions Affectées ({tickets.length})
             </h2>
             <span className="text-[11px] text-emerald-400 font-mono">
-              Directement synchronisé
+              Actualisé automatiquement
             </span>
           </div>
 

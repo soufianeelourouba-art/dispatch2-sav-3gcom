@@ -22,7 +22,7 @@ class TelegramBotService {
 
   public getDirectMobilePortalLink(tech: Technician): string {
     const base = typeof window !== 'undefined' ? window.location.origin : 'https://dispatch2-sav-3gcom.vercel.app';
-    return `${base}/?tech=${tech.id}`;
+    return `${base}/?act=${encodeURIComponent(tech.telegramActivationToken || '')}`;
   }
 
   public getWhatsAppShareUrl(tech: Technician): string {

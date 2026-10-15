@@ -15,6 +15,8 @@ import {
   LITIGE_REASONS
 } from '../types';
 import { db, auth, createAuthAccount } from './firebase';
+import { computeTicketSLA, reduceTicketStatus, applyEventToTicket } from '../domain/tickets';
+import { notifyTechnicians } from './api';
 import {
   collection,
   doc,
@@ -25,6 +27,7 @@ import {
   query,
   where,
   writeBatch,
+  waitForPendingWrites,
   Query,
   Unsubscribe,
 } from 'firebase/firestore';
@@ -34,6 +37,8 @@ import {
   signOut,
   sendPasswordResetEmail,
 } from 'firebase/auth';
+
+export { computeTicketSLA, reduceTicketStatus };
 
 // Firestore `in` / `array-contains-any` filters accept at most 30 values.
 const FIRESTORE_IN_LIMIT = 30;
@@ -55,32 +60,6 @@ function clean<T extends object>(data: T): T {
   return Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined)) as T;
 }
 
-// --- SLA Invariant (24-Hour Strict SLA) ---
-export function computeTicketSLA(registeredAt: string): {
-  slaDeadline: string;
-  slaStatus: SLAStatus;
-  slaRemainingHours: number;
-} {
-  const regTime = new Date(registeredAt).getTime();
-  const deadlineTime = regTime + 24 * 3600 * 1000; // 24 hours deadline
-  const now = Date.now();
-  const diffMs = deadlineTime - now;
-  const slaRemainingHours = Math.round((diffMs / (3600 * 1000)) * 10) / 10;
-
-  let slaStatus: SLAStatus = 'ON_TIME';
-  if (diffMs <= 0) {
-    slaStatus = 'EXPIRED';
-  } else if (diffMs < 6 * 3600 * 1000) {
-    slaStatus = 'WARNING'; // Less than 6 hours remaining
-  }
-
-  return {
-    slaDeadline: new Date(deadlineTime).toISOString(),
-    slaStatus,
-    slaRemainingHours,
-  };
-}
-
 // --- Format SLA remaining text for clean display ---
 export function formatSLADisplay(remainingHours: number, status: SLAStatus): { text: string; label: string } {
   if (status === 'EXPIRED') {
@@ -99,45 +78,6 @@ export function formatSLADisplay(remainingHours: number, status: SLAStatus): { t
     text: `${hours}h${mins > 0 ? mins.toString().padStart(2, '0') : ''}`,
     label: `Reste ${hours}h${mins > 0 ? mins : ''}`,
   };
-}
-
-// --- Invariant 2: Pure status reducer from append-only events (§8.2) ---
-export function reduceTicketStatus(events: TicketEvent[], ticket: Partial<Ticket>): TicketStatus {
-  const sorted = [...events].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  );
-
-  if (!ticket.technicalZoneId && !ticket.sectorId) {
-    return 'ZONE_TO_MAP';
-  }
-
-  if (sorted.length === 0) {
-    return 'TO_ASSIGN';
-  }
-
-  const lastEvent = sorted[sorted.length - 1];
-
-  switch (lastEvent.eventType) {
-    case 'NF_SUBMITTED':
-      return 'COMPLETED';
-    case 'LITIGE_REPORTED':
-    case 'LITIGE_VALIDATED':
-      return 'LITIGE';
-    case 'LITIGE_REOPENED':
-      return 'REOPENED';
-    case 'ASSIGNED':
-    case 'REASSIGNED':
-    case 'TELEGRAM_SENT':
-      return 'ASSIGNED';
-    case 'PROPOSED':
-      return 'PROPOSED';
-    case 'IMPORT':
-    default:
-      if (!ticket.technicalZoneId) {
-        return 'ZONE_TO_MAP';
-      }
-      return 'TO_ASSIGN';
-  }
 }
 
 // --- Invariant 5: Timezone formatting (Africa/Casablanca) ---
@@ -685,42 +625,7 @@ class AppStateStore {
     this.events.push(newEvent);
 
     const allTicketEvents = this.getEventsForTicket(ticket.id);
-    const newStatus = reduceTicketStatus(allTicketEvents, ticket);
-
-    const updatedTicket: Ticket = {
-      ...ticket,
-      currentStatus: newStatus,
-      isClosed: newStatus === 'COMPLETED',
-      updatedAt: new Date().toISOString(),
-      lastEventAt: newEvent.createdAt,
-    };
-
-    if (params.technicianId) {
-      updatedTicket.currentAssignedTechId = params.technicianId;
-    }
-
-    if (params.nfType) {
-      updatedTicket.nfType = params.nfType;
-      updatedTicket.ontSerialNumber = params.ontSerialNumber;
-      updatedTicket.cableLengthMeters = params.cableLengthMeters;
-    }
-
-    if (params.litigeReasonCode) {
-      updatedTicket.lastLitigeReasonCode = params.litigeReasonCode;
-      updatedTicket.lastLitigeReasonLabel = params.litigeReasonLabel;
-      updatedTicket.lastLitigeRdvDate = params.rdvDateTime;
-      updatedTicket.lastVisitedTechName = params.technicianName;
-      updatedTicket.lastVisitedAt = newEvent.createdAt;
-    }
-
-    if (params.newClientPhone) {
-      updatedTicket.clientPhone = params.newClientPhone;
-      updatedTicket.reopenedWithNewPhone = params.newClientPhone;
-    }
-
-    if (params.dispatcherUpdateNotes) {
-      updatedTicket.lastDispatcherUpdateNotes = params.dispatcherUpdateNotes;
-    }
+    const updatedTicket = applyEventToTicket(ticket, newEvent, allTicketEvents);
 
     this.tickets[ticketIndex] = updatedTicket;
     this.persist();
@@ -797,6 +702,9 @@ class AppStateStore {
       newClientPhone: params.newPhone,
       notes: `Ticket réouvert avec informations complémentaires : ${params.dispatcherNotes}`,
     });
+    if (ticket.currentAssignedTechId) {
+      this.sendWorkOrders([params.ticketId]);
+    }
   }
 
   public validateLitige(params: {
@@ -825,19 +733,17 @@ class AppStateStore {
         actorName,
         technicianId: p.technicianId,
         technicianName: p.technicianName,
-        notes: 'Affectation validée et envoyée en file Telegram.',
-      });
-
-      this.addTicketEvent({
-        ticketId: p.ticketId,
-        eventType: 'TELEGRAM_SENT',
-        actorRole: 'SYSTEM',
-        actorName: 'Bot Telegram 3GCOM',
-        technicianId: p.technicianId,
-        technicianName: p.technicianName,
-        notes: `Ticket transmis au compte Telegram de ${p.technicianName}.`,
+        notes: 'Affectation validée, envoi de l\'ordre de travail sur Telegram.',
       });
     });
+    this.sendWorkOrders(proposals.map(p => p.ticketId));
+  }
+
+  // Once the assignment events are stored, ask the server to message the technicians.
+  private sendWorkOrders(ticketIds: string[]) {
+    waitForPendingWrites(db)
+      .then(() => notifyTechnicians(ticketIds))
+      .catch(err => console.warn('Envoi Telegram impossible :', err?.message));
   }
 
   public reassignTicket(ticketId: string, technicianId: string, technicianName: string, actorName: string, reason?: string) {
@@ -850,6 +756,7 @@ class AppStateStore {
       technicianName,
       notes: reason ? `Réaffectation manuelle : ${reason}` : 'Réaffectation manuelle par l\'orienteur.',
     });
+    this.sendWorkOrders([ticketId]);
   }
 
   // --- Excel Import & Upsert ---

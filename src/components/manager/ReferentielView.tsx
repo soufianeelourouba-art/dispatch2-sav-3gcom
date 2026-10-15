@@ -29,7 +29,7 @@ import {
   ChevronRight,
   ChevronDown
 } from 'lucide-react';
-import { telegramBotService } from '../../services/telegramBotService';
+import { setupTelegramBot } from '../../services/api';
 
 export const ReferentielView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'HIERARCHY' | 'DCS' | 'SECTORS' | 'ZONES' | 'USERS' | 'ALIASES' | 'TELEGRAM_CONFIG'>('HIERARCHY');
@@ -108,8 +108,9 @@ export const ReferentielView: React.FC = () => {
   const [newAliasRaw, setNewAliasRaw] = useState('');
   const [newAliasTargetZone, setNewAliasTargetZone] = useState('');
 
-  // Telegram bot config (public username only — the token lives in Vercel env vars)
-  const [botUsername, setBotUsername] = useState(store.getTelegramBotUsername());
+  // Telegram bot (the token lives only in the Vercel environment variables)
+  const [isConnectingBot, setIsConnectingBot] = useState(false);
+  const [botResult, setBotResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -393,10 +394,17 @@ export const ReferentielView: React.FC = () => {
     notifySuccess('Alias enregistré.');
   };
 
-  const handleSaveBotUsername = (e: React.FormEvent) => {
-    e.preventDefault();
-    store.setTelegramBotUsername(botUsername.trim().replace(/^@/, ''));
-    notifySuccess('Nom du bot enregistré.');
+  const handleConnectBot = async () => {
+    setIsConnectingBot(true);
+    setBotResult(null);
+    try {
+      const { username } = await setupTelegramBot();
+      setBotResult({ success: true, message: `Bot @${username} connecté : il reçoit désormais les activations et les comptes-rendus des techniciens.` });
+    } catch (err: any) {
+      setBotResult({ success: false, message: err?.message || 'Connexion du bot impossible.' });
+    } finally {
+      setIsConnectingBot(false);
+    }
   };
 
   const toggleUserSectorChoice = (secId: string, isEdit: boolean) => {
@@ -1346,26 +1354,35 @@ export const ReferentielView: React.FC = () => {
             </span>
           </div>
 
-          <form onSubmit={handleSaveBotUsername} className="space-y-4 text-xs">
-            <div>
-              <label className="text-[11px] font-semibold text-slate-700 block mb-1">Nom d'utilisateur public du bot</label>
-              <input
-                type="text"
-                value={botUsername}
-                onChange={e => setBotUsername(e.target.value)}
-                placeholder="ex: Dispatch3gcomBot"
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono"
-              />
-              <p className="text-[11px] text-slate-500 mt-1">Utilisé pour générer les liens d'activation t.me/… envoyés aux techniciens.</p>
-            </div>
+          <div className="text-xs space-y-1 text-slate-600">
+            <p>
+              Bot actuellement connecté :{' '}
+              <b className="font-mono text-slate-900">
+                {store.getTelegramBotUsername() ? `@${store.getTelegramBotUsername()}` : 'aucun'}
+              </b>
+            </p>
+            <p>Après avoir ajouté ou changé le token dans Vercel, cliquez sur le bouton pour (re)brancher le bot sur cette application.</p>
+          </div>
 
-            <button
-              type="submit"
-              className="px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors"
-            >
-              Enregistrer
-            </button>
-          </form>
+          {botResult && (
+            <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
+              botResult.success
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-rose-50 border-rose-200 text-rose-800'
+            }`}>
+              {botResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-rose-600" />}
+              <span>{botResult.message}</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleConnectBot}
+            disabled={isConnectingBot}
+            className="px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors disabled:opacity-50"
+          >
+            {isConnectingBot ? 'Connexion en cours…' : 'Connecter le bot'}
+          </button>
         </div>
       )}
 

@@ -1,7 +1,8 @@
 {
+  "regions": ["cdg1"],
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
