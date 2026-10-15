@@ -1,6 +1,7 @@
 // Pure interpretation of an imported claims file (rows already read from Excel/CSV).
 // No Firebase or XLSX dependency, so every rule here is unit-tested.
 import type { Sector, TechnicalZone, ZoneAlias } from '../types';
+import { moroccoOffsetMs, moroccoToUtc } from './moroccoTime';
 
 export const COLUMN_ALIASES = {
   ticketNumber: [
@@ -90,26 +91,7 @@ export function detectHeaders(rawHeaders: string[]): DetectedColumns {
   return result;
 }
 
-// --- Dates: file values are wall-clock times in Morocco (Africa/Casablanca) ---
-
-function casablancaOffsetMs(utcMs: number): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Africa/Casablanca',
-    hourCycle: 'h23',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(new Date(utcMs));
-  const get = (type: string) => Number(parts.find(p => p.type === type)?.value);
-  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
-  return asUtc - Math.floor(utcMs / 1000) * 1000;
-}
-
-export function casablancaToUtc(year: number, month: number, day: number, hour = 0, minute = 0, second = 0): Date {
-  const naive = Date.UTC(year, month - 1, day, hour, minute, second);
-  let utc = naive - casablancaOffsetMs(naive);
-  utc = naive - casablancaOffsetMs(utc); // second pass settles DST / Ramadan switches
-  return new Date(utc);
-}
+// --- Dates: file values are wall-clock times in Morocco ---
 
 const EXCEL_EPOCH_UTC = Date.UTC(1899, 11, 30);
 
@@ -125,7 +107,7 @@ export function parseRegisteredAt(value: unknown): string | null {
     // Excel serial: days since 1899-12-30, fractional part = time of day (Morocco wall clock)
     if (value < 1 || value > 100000) return null;
     const wall = new Date(EXCEL_EPOCH_UTC + Math.round(value * 86400) * 1000);
-    return casablancaToUtc(
+    return moroccoToUtc(
       wall.getUTCFullYear(), wall.getUTCMonth() + 1, wall.getUTCDate(),
       wall.getUTCHours(), wall.getUTCMinutes(), wall.getUTCSeconds()
     ).toISOString();
@@ -156,9 +138,9 @@ export function parseRegisteredAt(value: unknown): string | null {
     return null;
   }
   if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59 || s > 59) return null;
-  const result = casablancaToUtc(y, mo, d, h, mi, s);
+  const result = moroccoToUtc(y, mo, d, h, mi, s);
   // Rejects impossible days such as 31/02 (Date would silently roll over)
-  const check = new Date(result.getTime() + casablancaOffsetMs(result.getTime()));
+  const check = new Date(result.getTime() + moroccoOffsetMs(result.getTime()));
   if (check.getUTCDate() !== d || check.getUTCMonth() + 1 !== mo) return null;
   return result.toISOString();
 }

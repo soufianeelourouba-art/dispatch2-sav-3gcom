@@ -21,9 +21,15 @@ describe('formatSLADisplay', () => {
 });
 
 describe('formatCasablancaDateTime', () => {
-  it('affiche l\'heure du Maroc', () => {
-    expect(formatCasablancaDateTime('2026-10-14T07:30:00Z')).toBe('14/10/2026 08:30');
-    expect(formatCasablancaTimeOnly('2026-10-14T07:30:00Z')).toBe('08:30');
+  it('affiche l\'heure du Maroc (UTC+0 depuis le 20/09/2026)', () => {
+    expect(formatCasablancaDateTime('2026-10-14T07:30:00Z')).toBe('14/10/2026 07:30');
+    expect(formatCasablancaTimeOnly('2026-10-14T07:30:00Z')).toBe('07:30');
+  });
+  it('affiche l\'heure du Maroc (UTC+1 avant le changement)', () => {
+    expect(formatCasablancaDateTime('2026-07-14T07:30:00Z')).toBe('14/07/2026 08:30');
+  });
+  it('renvoie le texte tel quel si la date est invalide', () => {
+    expect(formatCasablancaDateTime('pas une date')).toBe('pas une date');
   });
   it('affiche un tiret si la date est absente', () => {
     expect(formatCasablancaDateTime(undefined)).toBe('—');

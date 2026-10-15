@@ -67,19 +67,20 @@ describe('detectHeaders', () => {
 });
 
 describe('parseRegisteredAt (heure du Maroc → UTC)', () => {
-  // Morocco is UTC+1 outside Ramadan.
+  // Maroc : UTC+1 jusqu'au 20/09/2026, puis UTC+0 définitivement (voir moroccoTime.ts).
   it('lit le format français JJ/MM/AAAA HH:MM', () => {
-    expect(parseRegisteredAt('14/10/2026 08:30')).toBe('2026-10-14T07:30:00.000Z');
+    expect(parseRegisteredAt('14/10/2026 08:30')).toBe('2026-10-14T08:30:00.000Z');
+    expect(parseRegisteredAt('14/07/2026 08:30')).toBe('2026-07-14T07:30:00.000Z');
   });
 
   it('accepte les variantes 14-10-2026, 14.10.26, 8h30 et sans heure', () => {
-    expect(parseRegisteredAt('14-10-2026 8h30')).toBe('2026-10-14T07:30:00.000Z');
-    expect(parseRegisteredAt('14.10.26 08:30:15')).toBe('2026-10-14T07:30:15.000Z');
-    expect(parseRegisteredAt('14/10/2026')).toBe('2026-10-13T23:00:00.000Z');
+    expect(parseRegisteredAt('14-10-2026 8h30')).toBe('2026-10-14T08:30:00.000Z');
+    expect(parseRegisteredAt('14.10.26 08:30:15')).toBe('2026-10-14T08:30:15.000Z');
+    expect(parseRegisteredAt('14/10/2026')).toBe('2026-10-14T00:00:00.000Z');
   });
 
   it('lit le format AAAA-MM-JJ HH:MM', () => {
-    expect(parseRegisteredAt('2026-10-14 08:30')).toBe('2026-10-14T07:30:00.000Z');
+    expect(parseRegisteredAt('2026-10-14 08:30')).toBe('2026-10-14T08:30:00.000Z');
   });
 
   it('garde tel quel un horodatage ISO avec fuseau', () => {
@@ -88,13 +89,12 @@ describe('parseRegisteredAt (heure du Maroc → UTC)', () => {
   });
 
   it('convertit une date Excel (numéro de série) au lieu de tomber en 1970', () => {
-    // 46309 = 14/10/2026, .3541666… = 08:30
-    expect(parseRegisteredAt(46309 + 8.5 / 24)).toBe('2026-10-14T07:30:00.000Z');
-    expect(parseRegisteredAt(46309)).toBe('2026-10-13T23:00:00.000Z');
+    // 46309 = 14/10/2026, + 8,5/24 = 08:30
+    expect(parseRegisteredAt(46309 + 8.5 / 24)).toBe('2026-10-14T08:30:00.000Z');
+    expect(parseRegisteredAt(46309)).toBe('2026-10-14T00:00:00.000Z');
   });
 
-  it('suit le passage à l\'heure UTC+0 pendant le Ramadan', () => {
-    // 1er mars 2026 : Maroc à UTC+0 (Ramadan)
+  it('suit l\'heure UTC+0 du Ramadan (avant le changement définitif)', () => {
     expect(parseRegisteredAt('01/03/2026 12:00')).toBe('2026-03-01T12:00:00.000Z');
   });
 
@@ -158,7 +158,7 @@ describe('interpretRows', () => {
       clientPhone: '0661223344',
       resolvedZoneId: 'z-maarif',
       resolvedSectorId: 'sec-casa',
-      registeredAt: '2026-10-14T07:30:00.000Z',
+      registeredAt: '2026-10-14T08:30:00.000Z',
       isValid: true,
     });
   });

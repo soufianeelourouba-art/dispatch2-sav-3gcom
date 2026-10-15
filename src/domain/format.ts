@@ -1,5 +1,6 @@
 // Display helpers (French labels, Africa/Casablanca time zone).
 import type { SLAStatus } from '../types';
+import { toMoroccoWallClock } from './moroccoTime';
 
 // --- Format SLA remaining text for clean display ---
 export function formatSLADisplay(remainingHours: number, status: SLAStatus): { text: string; label: string } {
@@ -14,34 +15,28 @@ export function formatSLADisplay(remainingHours: number, status: SLAStatus): { t
   };
 }
 
-// --- Invariant 5: Timezone formatting (Africa/Casablanca) ---
-export function formatCasablancaDateTime(utcIsoString: string | undefined): string {
+// --- Invariant 5: Timezone formatting (Morocco wall clock, see moroccoTime.ts) ---
+const dateTimeFormatter = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: 'UTC',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+const timeFormatter = new Intl.DateTimeFormat('fr-FR', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' });
+
+function formatMorocco(utcIsoString: string | undefined, formatter: Intl.DateTimeFormat): string {
   if (!utcIsoString) return '—';
-  try {
-    const date = new Date(utcIsoString);
-    return new Intl.DateTimeFormat('fr-FR', {
-      timeZone: 'Africa/Casablanca',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  } catch {
-    return utcIsoString;
-  }
+  const date = new Date(utcIsoString);
+  if (isNaN(date.getTime())) return utcIsoString;
+  return formatter.format(toMoroccoWallClock(date));
+}
+
+export function formatCasablancaDateTime(utcIsoString: string | undefined): string {
+  return formatMorocco(utcIsoString, dateTimeFormatter);
 }
 
 export function formatCasablancaTimeOnly(utcIsoString: string | undefined): string {
-  if (!utcIsoString) return '—';
-  try {
-    const date = new Date(utcIsoString);
-    return new Intl.DateTimeFormat('fr-FR', {
-      timeZone: 'Africa/Casablanca',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  } catch {
-    return utcIsoString;
-  }
+  return formatMorocco(utcIsoString, timeFormatter);
 }
