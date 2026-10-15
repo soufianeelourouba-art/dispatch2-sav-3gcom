@@ -303,6 +303,16 @@ class AppStateStore {
     return this.users;
   }
 
+  // Orienteurs of a sector. The account's sectorIds is the single source of truth (it also
+  // drives the Firestore access rules); the sector's dispatcher fields are only a display copy.
+  public getSectorOrienteurs(sectorId: string): User[] {
+    return this.users.filter(u => u.role === 'DISPATCHER' && (u.sectorIds || []).includes(sectorId));
+  }
+
+  public getSectorOrienteurNames(sectorId: string): string {
+    return this.getSectorOrienteurs(sectorId).map(u => u.name).join(', ');
+  }
+
   // Creates the Firebase Auth account, then its profile document (role + sectors).
   public async addUser(
     userData: { name: string; email: string; password: string; role: User['role']; sectorIds?: string[] }

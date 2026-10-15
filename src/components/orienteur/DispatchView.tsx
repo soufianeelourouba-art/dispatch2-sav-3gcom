@@ -98,9 +98,11 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
   const simulationResult = useMemo(() => {
     return calculateDispatchProposals(
       dispatchableTickets, 
-      selectedSectorId !== 'ALL' ? selectedSectorId : (currentUser.sectorIds?.[0] || currentUser.sectorId)
+      // "All my sectors": no sector restriction — technicians are already limited to the
+      // orienteur's sectors and each ticket is matched on its own zone.
+      selectedSectorId !== 'ALL' ? selectedSectorId : undefined
     );
-  }, [dispatchableTickets, selectedSectorId, currentUser.sectorIds, currentUser.sectorId]);
+  }, [dispatchableTickets, selectedSectorId]);
 
   const proposalsMap = useMemo(() => {
     const map = new Map<string, { techId: string | null; techName: string | null; rationale: string; isSecondVisit: boolean }>();

@@ -314,7 +314,7 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
 
         {selectedSector && (
           <div className="text-xs text-slate-500 shrink-0 flex items-center gap-2">
-            <span>Orienteur responsable : <b>{selectedSector.dispatcherName || 'Non assigné'}</b></span>
+            <span>Orienteur responsable : <b>{store.getSectorOrienteurNames(selectedSector.id) || 'Non assigné'}</b></span>
             <button
               onClick={() => setSelectedSectorFilter('ALL')}
               className="text-xs font-semibold text-purple-700 hover:underline"
@@ -721,7 +721,7 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
                       </span>
                     </td>
                     <td className="py-3 px-4 font-medium text-slate-800">
-                      {item.sector.dispatcherName || 'Non assigné'}
+                      {store.getSectorOrienteurNames(item.sector.id) || <span className="text-amber-700">Non assigné</span>}
                     </td>
                     <td className="py-3 px-4 text-center font-mono font-bold text-slate-900">
                       {item.totalVolume}

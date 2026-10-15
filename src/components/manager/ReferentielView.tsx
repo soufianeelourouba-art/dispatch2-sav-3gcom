@@ -215,7 +215,7 @@ export const ReferentielView: React.FC = () => {
     setEditSectorCode(sec.code);
     setEditSectorName(sec.name);
     setEditSectorDcId(sec.dcId);
-    setEditSectorDispatcherId(sec.dispatcherId || (sec.dispatcherIds ? sec.dispatcherIds[0] : '') || '');
+    setEditSectorDispatcherId(store.getSectorOrienteurs(sec.id)[0]?.id || '');
   };
 
   const handleSaveEditSector = (e: React.FormEvent) => {
