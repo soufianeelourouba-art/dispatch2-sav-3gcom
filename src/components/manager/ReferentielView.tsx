@@ -94,25 +94,22 @@ export const ReferentielView: React.FC = () => {
 
   // User Accounts Form & Edit Modal
   const [newUserName, setNewUserName] = useState('');
-  const [newUserUsername, setNewUserUsername] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [userFormError, setUserFormError] = useState<string | null>(null);
   const [newUserRole, setNewUserRole] = useState<'DISPATCHER' | 'MANAGER'>('DISPATCHER');
   const [newUserSelectedSectorIds, setNewUserSelectedSectorIds] = useState<string[]>([]);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editUserName, setEditUserName] = useState('');
-  const [editUserPassword, setEditUserPassword] = useState('');
   const [editUserSelectedSectorIds, setEditUserSelectedSectorIds] = useState<string[]>([]);
 
   // Alias Form
   const [newAliasRaw, setNewAliasRaw] = useState('');
   const [newAliasTargetZone, setNewAliasTargetZone] = useState('');
 
-  // Telegram bot config
-  const [botToken, setBotToken] = useState(store.getTelegramToken());
-  const [tokenSaved, setTokenSaved] = useState(false);
-  const [isVerifyingBot, setIsVerifyingBot] = useState(false);
-  const [botVerifyResult, setBotVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
+  // Telegram bot config (public username only — the token lives in Vercel env vars)
+  const [botUsername, setBotUsername] = useState(store.getTelegramBotUsername());
 
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -307,36 +304,49 @@ export const ReferentielView: React.FC = () => {
     }
   };
 
-  // --- Handlers: Users (Orienteurs with Multi-Sector support) ---
-  const handleAddUser = (e: React.FormEvent) => {
+  // --- Handlers: Users (Firebase Auth accounts + profile with sectors) ---
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserName.trim() || !newUserUsername.trim() || !newUserPassword.trim()) return;
+    setUserFormError(null);
+    if (!newUserName.trim() || !newUserEmail.trim()) return;
+    if (newUserPassword.length < 8) {
+      setUserFormError('Le mot de passe provisoire doit contenir au moins 8 caractères.');
+      return;
+    }
 
-    store.addUser({
-      name: newUserName.trim(),
-      username: newUserUsername.trim().toLowerCase(),
-      password: newUserPassword.trim(),
-      role: newUserRole,
-      sectorId: newUserSelectedSectorIds[0] || undefined,
-      sectorIds: newUserRole === 'DISPATCHER' ? newUserSelectedSectorIds : undefined,
-      email: newUserEmail.trim() || undefined,
-    });
-
-    setNewUserName('');
-    setNewUserUsername('');
-    setNewUserPassword('');
-    setNewUserEmail('');
-    setNewUserSelectedSectorIds([]);
-    notifySuccess('Compte créé avec succès dans la base !');
+    setIsCreatingUser(true);
+    try {
+      await store.addUser({
+        name: newUserName,
+        email: newUserEmail,
+        password: newUserPassword,
+        role: newUserRole,
+        sectorIds: newUserSelectedSectorIds,
+      });
+      setNewUserName('');
+      setNewUserPassword('');
+      setNewUserEmail('');
+      setNewUserSelectedSectorIds([]);
+      notifySuccess('Compte créé. Communiquez le mot de passe provisoire à l\'utilisateur.');
+    } catch (err: any) {
+      const code: string = err?.code || '';
+      setUserFormError(
+        code === 'auth/email-already-in-use' ? 'Un compte existe déjà avec cette adresse e-mail.'
+        : code === 'auth/invalid-email' ? 'Adresse e-mail invalide.'
+        : code === 'auth/weak-password' ? 'Mot de passe trop faible.'
+        : err?.message || 'Création du compte impossible.'
+      );
+    } finally {
+      setIsCreatingUser(false);
+    }
   };
 
   const handleOpenEditUser = (user: User) => {
     setEditingUser(user);
     setEditUserName(user.name);
-    setEditUserPassword(user.password || '');
     setEditUserSelectedSectorIds(
-      user.sectorIds && user.sectorIds.length > 0 
-        ? [...user.sectorIds] 
+      user.sectorIds && user.sectorIds.length > 0
+        ? [...user.sectorIds]
         : user.sectorId ? [user.sectorId] : []
     );
   };
@@ -347,19 +357,28 @@ export const ReferentielView: React.FC = () => {
 
     store.updateUser(editingUser.id, {
       name: editUserName.trim(),
-      password: editUserPassword.trim(),
       sectorId: editUserSelectedSectorIds[0] || undefined,
-      sectorIds: editingUser.role === 'DISPATCHER' ? editUserSelectedSectorIds : undefined,
+      sectorIds: editingUser.role === 'DISPATCHER' ? editUserSelectedSectorIds : [],
     });
 
     setEditingUser(null);
     notifySuccess('Compte utilisateur mis à jour.');
   };
 
+  const handleSendPasswordReset = async (user: User) => {
+    const email = user.email || user.username;
+    const res = await store.sendPasswordReset(email);
+    notifySuccess(res.success ? `Lien de réinitialisation envoyé à ${email}.` : `Envoi impossible : ${res.error}`);
+  };
+
   const handleDeleteUser = (userId: string, name: string) => {
-    if (confirm(`Confirmer la suppression du compte "${name}" ?`)) {
+    if (userId === store.getCurrentUser()?.id) {
+      alert('Vous ne pouvez pas supprimer votre propre compte.');
+      return;
+    }
+    if (confirm(`Retirer l'accès de "${name}" ? Il ne pourra plus rien consulter.`)) {
       store.deleteUser(userId);
-      notifySuccess('Compte supprimé.');
+      notifySuccess('Accès retiré.');
     }
   };
 
@@ -374,36 +393,10 @@ export const ReferentielView: React.FC = () => {
     notifySuccess('Alias enregistré.');
   };
 
-  const handleSaveTelegramToken = async (e: React.FormEvent) => {
+  const handleSaveBotUsername = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsVerifyingBot(true);
-    setBotVerifyResult(null);
-    store.setTelegramToken(botToken.trim());
-
-    try {
-      const info = await telegramBotService.refreshBotInfo(botToken.trim());
-      if (info) {
-        telegramBotService.startPolling();
-        setBotVerifyResult({
-          success: true,
-          message: `Bot @${info.username} connecté avec succès ! Envoi de liens et retours opérationnels.`,
-        });
-      } else {
-        setBotVerifyResult({
-          success: false,
-          message: 'Token enregistré, mais Telegram API n\'a pas répondu.',
-        });
-      }
-    } catch (err: any) {
-      setBotVerifyResult({
-        success: false,
-        message: `Erreur Telegram : ${err.message}`,
-      });
-    } finally {
-      setIsVerifyingBot(false);
-      setTokenSaved(true);
-      setTimeout(() => setTokenSaved(false), 5000);
-    }
+    store.setTelegramBotUsername(botUsername.trim().replace(/^@/, ''));
+    notifySuccess('Nom du bot enregistré.');
   };
 
   const toggleUserSectorChoice = (secId: string, isEdit: boolean) => {
@@ -1099,24 +1092,25 @@ export const ReferentielView: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-slate-700 block mb-1">Identifiant de connexion *</label>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">E-mail de connexion *</label>
                 <input
-                  type="text"
-                  value={newUserUsername}
-                  onChange={e => setNewUserUsername(e.target.value)}
-                  placeholder="ex: orienteur_casa"
+                  type="email"
+                  value={newUserEmail}
+                  onChange={e => setNewUserEmail(e.target.value)}
+                  placeholder="ex: omar.benjelloun@3gcom.ma"
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono"
                   required
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-slate-700 block mb-1">Mot de passe *</label>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">Mot de passe provisoire * (8+ car.)</label>
                 <input
                   type="text"
+                  autoComplete="new-password"
                   value={newUserPassword}
                   onChange={e => setNewUserPassword(e.target.value)}
-                  placeholder="ex: casa2026"
+                  placeholder="à communiquer à l'utilisateur"
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono"
                   required
                 />
@@ -1163,12 +1157,20 @@ export const ReferentielView: React.FC = () => {
               </div>
             )}
 
+            {userFormError && (
+              <div className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600" />
+                <span>{userFormError}</span>
+              </div>
+            )}
+
             <div className="flex justify-end pt-1">
               <button
                 type="submit"
-                className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors"
+                disabled={isCreatingUser}
+                className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors disabled:opacity-50"
               >
-                Créer l'utilisateur
+                {isCreatingUser ? 'Création…' : 'Créer l\'utilisateur'}
               </button>
             </div>
           </form>
@@ -1179,10 +1181,9 @@ export const ReferentielView: React.FC = () => {
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
                 <tr>
                   <th className="py-3 px-4">Utilisateur</th>
-                  <th className="py-3 px-4">Identifiant</th>
+                  <th className="py-3 px-4">E-mail</th>
                   <th className="py-3 px-4">Rôle</th>
                   <th className="py-3 px-4">Secteurs Gérés (Multi-secteurs)</th>
-                  <th className="py-3 px-4">Mot de passe</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -1218,8 +1219,15 @@ export const ReferentielView: React.FC = () => {
                           </div>
                         )}
                       </td>
-                      <td className="py-3 px-4 font-mono text-slate-600">{u.password || '••••••'}</td>
-                      <td className="py-3 px-4 text-right space-x-2">
+                      <td className="py-3 px-4 text-right space-x-2 whitespace-nowrap">
+                        <button
+                          onClick={() => handleSendPasswordReset(u)}
+                          className="p-1.5 text-slate-700 hover:bg-slate-100 rounded-lg inline-flex items-center gap-1 font-semibold text-xs"
+                          title="Envoyer un e-mail de réinitialisation du mot de passe"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                          <span>Mot de passe</span>
+                        </button>
                         <button
                           onClick={() => handleOpenEditUser(u)}
                           className="p-1.5 text-slate-700 hover:bg-slate-100 rounded-lg inline-flex items-center gap-1 font-semibold text-xs"
@@ -1330,39 +1338,32 @@ export const ReferentielView: React.FC = () => {
             <Send className="w-5 h-5 text-sky-600" />
             <span>Configuration du Bot Telegram Superviseur</span>
           </h2>
-          <p className="text-xs text-slate-500">
-            Saisissez le token de votre Bot Telegram créé via <b>@BotFather</b>. Les techniciens activent leur liaison via un lien unique sécurisé.
-          </p>
+          <div className="p-3 rounded-xl border border-sky-200 bg-sky-50 text-sky-900 text-xs flex items-start gap-2">
+            <ShieldCheck className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+            <span>
+              Le <b>token</b> du bot (fourni par <b>@BotFather</b>) est un secret : il est stocké uniquement sur le serveur
+              (variable d'environnement Vercel <code className="font-mono">TELEGRAM_BOT_TOKEN</code>) et n'est jamais envoyé aux navigateurs.
+            </span>
+          </div>
 
-          <form onSubmit={handleSaveTelegramToken} className="space-y-4 text-xs">
+          <form onSubmit={handleSaveBotUsername} className="space-y-4 text-xs">
             <div>
-              <label className="text-[11px] font-semibold text-slate-700 block mb-1">Bot Token Telegram (HTTP API)</label>
+              <label className="text-[11px] font-semibold text-slate-700 block mb-1">Nom d'utilisateur public du bot</label>
               <input
                 type="text"
-                value={botToken}
-                onChange={e => setBotToken(e.target.value)}
-                placeholder="ex: 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+                value={botUsername}
+                onChange={e => setBotUsername(e.target.value)}
+                placeholder="ex: Dispatch3gcomBot"
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono"
               />
+              <p className="text-[11px] text-slate-500 mt-1">Utilisé pour générer les liens d'activation t.me/… envoyés aux techniciens.</p>
             </div>
-
-            {botVerifyResult && (
-              <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
-                botVerifyResult.success 
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
-                  : 'bg-rose-50 border-rose-200 text-rose-800'
-              }`}>
-                {botVerifyResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-rose-600" />}
-                <span>{botVerifyResult.message}</span>
-              </div>
-            )}
 
             <button
               type="submit"
-              disabled={isVerifyingBot}
-              className="px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors disabled:opacity-50"
+              className="px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors"
             >
-              {isVerifyingBot ? 'Vérification en cours...' : 'Enregistrer & Tester la Connexion'}
+              Enregistrer
             </button>
           </form>
         </div>
@@ -1566,16 +1567,6 @@ export const ReferentielView: React.FC = () => {
                   value={editUserName}
                   onChange={e => setEditUserName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900"
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-slate-700 block mb-1">Mot de passe</label>
-                <input
-                  type="text"
-                  value={editUserPassword}
-                  onChange={e => setEditUserPassword(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-mono"
                   required
                 />
               </div>

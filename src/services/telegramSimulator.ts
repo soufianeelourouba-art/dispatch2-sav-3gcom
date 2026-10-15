@@ -94,40 +94,7 @@ class TelegramGatewayService {
 
     this.queue.unshift(msg);
     this.notify();
-
-    // Real Telegram Bot API dispatch if BotFather token is configured
-    try {
-      const botToken = store.getTelegramToken();
-      const tech = store.getTechnicians().find(t => t.id === technicianId);
-
-      if (botToken && tech?.telegramChatId && !tech?.telegramLinkDisabled) {
-        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: tech.telegramChatId,
-            text: messageText,
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  { text: '🟢 NF (Normalisé)', callback_data: `nf_${ticket.id}` },
-                  { text: '🔴 Litige (LC)', callback_data: `litige_${ticket.id}` }
-                ]
-              ]
-            }
-          })
-        }).then(res => {
-          if (!res.ok) {
-            console.warn('Telegram Bot API response:', res.status, res.statusText);
-          }
-        }).catch(err => {
-          console.warn('Telegram Bot network dispatch note:', err);
-        });
-      }
-    } catch (e) {
-      console.warn('Real telegram bot dispatch exception:', e);
-    }
+    // Real Telegram delivery is done server-side (webhook function), never from the browser.
   }
 
   private flushQueue() {

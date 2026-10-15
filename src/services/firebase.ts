@@ -1,6 +1,10 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { initializeFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase App
@@ -9,25 +13,24 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 // Initialize Auth
 export const auth = getAuth(app);
 
-// Initialize Firestore with specific databaseId if provided
+// Firestore with an IndexedDB cache shared across tabs: the app keeps working
+// offline and pending writes are replayed automatically when the network returns.
 export const db = initializeFirestore(
   app,
-  {},
+  { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
   firebaseConfig.firestoreDatabaseId || '(default)'
 );
 
-// Connection test invariant
-export async function testFirestoreConnection(): Promise<boolean> {
+// Creates a Firebase Auth account without signing out the current manager:
+// the client SDK signs in the newly created user, so it is done on a throwaway app instance.
+export async function createAuthAccount(email: string, password: string): Promise<string> {
+  const secondary = initializeApp(firebaseConfig, `account-creation-${Date.now()}`);
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log('✅ Connexion Firestore Cloud établie avec succès.');
-    return true;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('⚠️ Firestore mode hors-ligne ou configuration à vérifier.');
-    } else {
-      console.log('ℹ️ Firestore connecté :', error);
-    }
-    return false;
+    const secondaryAuth = getAuth(secondary);
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    await signOut(secondaryAuth);
+    return cred.user.uid;
+  } finally {
+    await deleteApp(secondary);
   }
 }

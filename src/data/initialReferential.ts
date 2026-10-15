@@ -1,40 +1,37 @@
-import { DC, Sector, TechnicalZone, ZoneAlias, Technician, User, Ticket, TicketEvent } from '../types';
+﻿import type { DC, Sector, TechnicalZone, ZoneAlias, Technician, Ticket, TicketEvent } from '../types';
 
-// --- 1. Directions Centrales / Régionales (DC) ---
+// --- 1. Directions Centrales / RÃ©gionales (DC) ---
 export const INITIAL_DCS: DC[] = [
   {
     id: 'dc-casa',
     code: 'DC-CASA',
-    name: 'Direction Régionale Grand Casablanca',
-    description: 'Délégation régionale Casablanca, Mohammedia et périphérie',
+    name: 'Direction RÃ©gionale Grand Casablanca',
+    description: 'DÃ©lÃ©gation rÃ©gionale Casablanca, Mohammedia et pÃ©riphÃ©rie',
     createdAt: '2026-01-01T08:00:00Z',
   },
   {
     id: 'dc-rabat',
     code: 'DC-RABAT',
-    name: 'Direction Régionale Rabat - Salé - Kénitra',
-    description: 'Rabat, Salé, Témara, Skhirat et Kénitra',
+    name: 'Direction RÃ©gionale Rabat - SalÃ© - KÃ©nitra',
+    description: 'Rabat, SalÃ©, TÃ©mara, Skhirat et KÃ©nitra',
     createdAt: '2026-01-01T08:00:00Z',
   },
   {
     id: 'dc-nord',
     code: 'DC-NORD',
-    name: 'Direction Régionale Nord (Tanger - Tétouan)',
-    description: 'Tanger Médina, Tétouan, Larache et côte nord',
+    name: 'Direction RÃ©gionale Nord (Tanger - TÃ©touan)',
+    description: 'Tanger MÃ©dina, TÃ©touan, Larache et cÃ´te nord',
     createdAt: '2026-01-01T08:00:00Z',
   },
 ];
 
-// --- 2. Secteurs Géographiques (Appartiennent à une DC) ---
+// --- 2. Secteurs GÃ©ographiques (Appartiennent Ã  une DC) ---
 export const INITIAL_SECTORS: Sector[] = [
   {
     id: 'sec-cas-nord',
     dcId: 'dc-casa',
     code: 'CAS-NORD',
     name: 'Casablanca Nord',
-    dispatcherId: 'user-orienteur-cas',
-    dispatcherIds: ['user-orienteur-cas'],
-    dispatcherName: 'Omar Benjelloun',
     createdAt: '2026-01-01T08:00:00Z',
   },
   {
@@ -42,9 +39,6 @@ export const INITIAL_SECTORS: Sector[] = [
     dcId: 'dc-casa',
     code: 'CAS-CENTRE',
     name: 'Casablanca Centre & Anfa',
-    dispatcherId: 'user-orienteur-cas',
-    dispatcherIds: ['user-orienteur-cas'],
-    dispatcherName: 'Omar Benjelloun',
     createdAt: '2026-01-01T08:00:00Z',
   },
   {
@@ -52,80 +46,28 @@ export const INITIAL_SECTORS: Sector[] = [
     dcId: 'dc-casa',
     code: 'CAS-SUD',
     name: 'Casablanca Sud & Oasis',
-    dispatcherId: 'user-orienteur-cas',
-    dispatcherIds: ['user-orienteur-cas'],
-    dispatcherName: 'Omar Benjelloun',
     createdAt: '2026-01-01T08:00:00Z',
   },
   {
     id: 'sec-rab-sale',
     dcId: 'dc-rabat',
     code: 'RAB-SALE',
-    name: 'Rabat - Salé',
-    dispatcherId: 'user-orienteur-rab',
-    dispatcherIds: ['user-orienteur-rab'],
-    dispatcherName: 'Karim Idrissi',
+    name: 'Rabat - SalÃ©',
     createdAt: '2026-01-01T08:00:00Z',
   },
   {
     id: 'sec-tng-tet',
     dcId: 'dc-nord',
     code: 'TNG-TET',
-    name: 'Tanger - Tétouan',
-    dispatcherId: 'user-orienteur-tng',
-    dispatcherIds: ['user-orienteur-tng'],
-    dispatcherName: 'Yassine Tazi',
+    name: 'Tanger - TÃ©touan',
     createdAt: '2026-01-01T08:00:00Z',
   },
 ];
 
-// --- 3. Comptes Utilisateurs (Orienteurs et Manager) ---
-export const INITIAL_USERS: User[] = [
-  {
-    id: 'user-orienteur-cas',
-    username: 'orienteur_casablanca',
-    name: 'Omar Benjelloun',
-    role: 'DISPATCHER',
-    sectorId: 'sec-cas-nord',
-    sectorIds: ['sec-cas-nord', 'sec-cas-centre', 'sec-cas-sud'], // 1 orienteur affecté à plusieurs secteurs
-    password: 'casa2026',
-    email: 'omar.benjelloun@3gcom.ma',
-    createdAt: '2026-01-01T08:00:00Z',
-  },
-  {
-    id: 'user-orienteur-rab',
-    username: 'orienteur_rabat',
-    name: 'Karim Idrissi',
-    role: 'DISPATCHER',
-    sectorId: 'sec-rab-sale',
-    sectorIds: ['sec-rab-sale'],
-    password: 'rabat2026',
-    email: 'karim.idrissi@3gcom.ma',
-    createdAt: '2026-01-01T08:00:00Z',
-  },
-  {
-    id: 'user-orienteur-tng',
-    username: 'orienteur_tanger',
-    name: 'Yassine Tazi',
-    role: 'DISPATCHER',
-    sectorId: 'sec-tng-tet',
-    sectorIds: ['sec-tng-tet'],
-    password: 'tanger2026',
-    email: 'yassine.tazi@3gcom.ma',
-    createdAt: '2026-01-01T08:00:00Z',
-  },
-  {
-    id: 'user-manager',
-    username: 'manager_national',
-    name: 'Amina Alami (Direction SAV)',
-    role: 'MANAGER',
-    password: 'admin3gcom',
-    email: 'amina.alami@3gcom.ma',
-    createdAt: '2026-01-01T08:00:00Z',
-  },
-];
+// Les comptes (orienteurs, managers) sont crÃ©Ã©s dans Firebase Authentication,
+// jamais dans le code source.
 
-// --- 4. Zones d'Intervention Techniques (Appartiennent à un Secteur) ---
+// --- 4. Zones d'Intervention Techniques (Appartiennent Ã  un Secteur) ---
 export const INITIAL_TECHNICAL_ZONES: TechnicalZone[] = [
   // Secteur Casablanca Nord
   {
@@ -142,7 +84,7 @@ export const INITIAL_TECHNICAL_ZONES: TechnicalZone[] = [
     sectorId: 'sec-cas-nord',
     dcId: 'dc-casa',
     msanCode: 'MSAN-SEBAA-02',
-    label: 'Aïn Sebaâ',
+    label: 'AÃ¯n SebaÃ¢',
     description: 'Bd Chefchaouni / Mimosa',
     createdAt: '2026-01-01T08:00:00Z',
   },
@@ -160,7 +102,7 @@ export const INITIAL_TECHNICAL_ZONES: TechnicalZone[] = [
     sectorId: 'sec-cas-nord',
     dcId: 'dc-casa',
     msanCode: 'MSAN-BELV-03',
-    label: 'Belvédère',
+    label: 'BelvÃ©dÃ¨re',
     description: 'Place Al Yassir',
     createdAt: '2026-01-01T08:00:00Z',
   },
@@ -180,7 +122,7 @@ export const INITIAL_TECHNICAL_ZONES: TechnicalZone[] = [
     sectorId: 'sec-cas-centre',
     dcId: 'dc-casa',
     msanCode: 'MSAN-MAAR-01',
-    label: 'Maârif Centre',
+    label: 'MaÃ¢rif Centre',
     description: 'Bd Bir Anzarane / Massira',
     createdAt: '2026-01-01T08:00:00Z',
   },
@@ -203,7 +145,7 @@ export const INITIAL_TECHNICAL_ZONES: TechnicalZone[] = [
     createdAt: '2026-01-01T08:00:00Z',
   },
 
-  // Secteur Rabat - Salé
+  // Secteur Rabat - SalÃ©
   {
     id: 'tz-rab-01',
     sectorId: 'sec-rab-sale',
@@ -227,12 +169,12 @@ export const INITIAL_TECHNICAL_ZONES: TechnicalZone[] = [
     sectorId: 'sec-rab-sale',
     dcId: 'dc-rabat',
     msanCode: 'MSAN-TABR-03',
-    label: 'Salé Tabriquet',
+    label: 'SalÃ© Tabriquet',
     description: 'Bd Mohammed V / Tabriquet',
     createdAt: '2026-01-01T08:00:00Z',
   },
 
-  // Secteur Tanger - Tétouan
+  // Secteur Tanger - TÃ©touan
   {
     id: 'tz-tng-01',
     sectorId: 'sec-tng-tet',
@@ -247,13 +189,13 @@ export const INITIAL_TECHNICAL_ZONES: TechnicalZone[] = [
     sectorId: 'sec-tng-tet',
     dcId: 'dc-nord',
     msanCode: 'MSAN-TET-01',
-    label: 'Tétouan Centre',
-    description: 'Wilaya / Centre ville Tétouan',
+    label: 'TÃ©touan Centre',
+    description: 'Wilaya / Centre ville TÃ©touan',
     createdAt: '2026-01-01T08:00:00Z',
   },
 ];
 
-// --- 5. Alias de Zones Techniques pour tolérance import Excel ---
+// --- 5. Alias de Zones Techniques pour tolÃ©rance import Excel ---
 export const INITIAL_ZONE_ALIASES: ZoneAlias[] = [
   { id: 'za-1', rawLabel: 'SIDI BERNOUSSI', technicalZoneId: 'tz-cas-01' },
   { id: 'za-2', rawLabel: 'Bernoussi', technicalZoneId: 'tz-cas-01' },
@@ -274,7 +216,7 @@ export const INITIAL_ZONE_ALIASES: ZoneAlias[] = [
   { id: 'za-30', rawLabel: 'MALABATA', technicalZoneId: 'tz-tng-01' },
 ];
 
-// --- 6. Techniciens (Affectés à un secteur et plusieurs Zones d'intervention) ---
+// --- 6. Techniciens (AffectÃ©s Ã  un secteur et plusieurs Zones d'intervention) ---
 export const INITIAL_TECHNICIANS: Technician[] = [
   // Casablanca Nord
   {
@@ -284,7 +226,7 @@ export const INITIAL_TECHNICIANS: Technician[] = [
     normalizedName: 'hamid khalid',
     phone: '+212 661 123456',
     telegramChatId: '',
-    zoneIds: ['tz-cas-01', 'tz-cas-02'], // Couvre Sidi Bernoussi et Aïn Sebaâ
+    zoneIds: ['tz-cas-01', 'tz-cas-02'], // Couvre Sidi Bernoussi et AÃ¯n SebaÃ¢
     isActive: true,
     notes: 'Expert raccordement vertical et soudure',
     createdAt: '2026-01-01T08:00:00Z',
@@ -298,7 +240,7 @@ export const INITIAL_TECHNICIANS: Technician[] = [
     telegramChatId: '',
     zoneIds: ['tz-cas-01', 'tz-cas-05'], // Partage Sidi Bernoussi et couvre Sidi Moumen
     isActive: true,
-    notes: 'Autonome avec réflectomètre optique',
+    notes: 'Autonome avec rÃ©flectomÃ¨tre optique',
     createdAt: '2026-01-01T08:00:00Z',
   },
   {
@@ -308,9 +250,9 @@ export const INITIAL_TECHNICIANS: Technician[] = [
     normalizedName: 'tariq mansouri',
     phone: '+212 663 345678',
     telegramChatId: '',
-    zoneIds: ['tz-cas-02', 'tz-cas-03'], // Partage Aïn Sebaâ et couvre Roches Noires
+    zoneIds: ['tz-cas-02', 'tz-cas-03'], // Partage AÃ¯n SebaÃ¢ et couvre Roches Noires
     isActive: true,
-    notes: 'Zone Roches Noires / Aïn Sebaâ',
+    notes: 'Zone Roches Noires / AÃ¯n SebaÃ¢',
     createdAt: '2026-01-01T08:00:00Z',
   },
   {
@@ -320,9 +262,9 @@ export const INITIAL_TECHNICIANS: Technician[] = [
     normalizedName: 'mehdi naciri',
     phone: '+212 664 456789',
     telegramChatId: '',
-    zoneIds: ['tz-cas-03', 'tz-cas-04'], // Partage Roches Noires et couvre Belvédère
+    zoneIds: ['tz-cas-03', 'tz-cas-04'], // Partage Roches Noires et couvre BelvÃ©dÃ¨re
     isActive: true,
-    notes: 'Spécialiste Belvédère / Roches Noires',
+    notes: 'SpÃ©cialiste BelvÃ©dÃ¨re / Roches Noires',
     createdAt: '2026-01-01T08:00:00Z',
   },
 
@@ -334,9 +276,9 @@ export const INITIAL_TECHNICIANS: Technician[] = [
     normalizedName: 'nabil cherkaoui',
     phone: '+212 665 567890',
     telegramChatId: '',
-    zoneIds: ['tz-cas-c01', 'tz-cas-c02'], // Maârif et Gauthier
+    zoneIds: ['tz-cas-c01', 'tz-cas-c02'], // MaÃ¢rif et Gauthier
     isActive: true,
-    notes: 'Spécialiste Maârif / Centre',
+    notes: 'SpÃ©cialiste MaÃ¢rif / Centre',
     createdAt: '2026-01-01T08:00:00Z',
   },
   {
@@ -346,13 +288,13 @@ export const INITIAL_TECHNICIANS: Technician[] = [
     normalizedName: 'youssef amrani',
     phone: '+212 666 678901',
     telegramChatId: '',
-    zoneIds: ['tz-cas-c01', 'tz-cas-c03'], // Maârif et Bourgogne
+    zoneIds: ['tz-cas-c01', 'tz-cas-c03'], // MaÃ¢rif et Bourgogne
     isActive: true,
     notes: 'Polyvalent centre-ville et littoral',
     createdAt: '2026-01-01T08:00:00Z',
   },
 
-  // Rabat - Salé
+  // Rabat - SalÃ©
   {
     id: 'tech-rab-01',
     sectorId: 'sec-rab-sale',
@@ -360,13 +302,13 @@ export const INITIAL_TECHNICIANS: Technician[] = [
     normalizedName: 'adil chaoui',
     phone: '+212 667 789012',
     telegramChatId: '',
-    zoneIds: ['tz-rab-01', 'tz-rab-02', 'tz-rab-03'], // Couvre Agdal, Hay Riad et Salé Tabriquet
+    zoneIds: ['tz-rab-01', 'tz-rab-02', 'tz-rab-03'], // Couvre Agdal, Hay Riad et SalÃ© Tabriquet
     isActive: true,
-    notes: 'Technicien référent Rabat',
+    notes: 'Technicien rÃ©fÃ©rent Rabat',
     createdAt: '2026-01-01T08:00:00Z',
   },
 
-  // Tanger - Tétouan
+  // Tanger - TÃ©touan
   {
     id: 'tech-tng-01',
     sectorId: 'sec-tng-tet',
@@ -374,9 +316,9 @@ export const INITIAL_TECHNICIANS: Technician[] = [
     normalizedName: 'bilal mansour',
     phone: '+212 668 890123',
     telegramChatId: '',
-    zoneIds: ['tz-tng-01', 'tz-tng-02'], // Couvre Malabata et Tétouan
+    zoneIds: ['tz-tng-01', 'tz-tng-02'], // Couvre Malabata et TÃ©touan
     isActive: true,
-    notes: 'Technicien axe Tanger - Tétouan',
+    notes: 'Technicien axe Tanger - TÃ©touan',
     createdAt: '2026-01-01T08:00:00Z',
   },
 ];

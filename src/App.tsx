@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Ticket } from './types';
-import { store } from './services/storage';
+import { store, AuthStatus } from './services/storage';
 import { Navbar } from './components/Navbar';
 import { SumCheckBanner } from './components/SumCheckBanner';
 import { DispatchView } from './components/orienteur/DispatchView';
@@ -17,6 +17,7 @@ import { TechnicianMobilePortal } from './components/technician/TechnicianMobile
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(store.getCurrentUser());
+  const [authStatus, setAuthStatus] = useState<AuthStatus>(store.getAuthStatus());
   const [activeTab, setActiveTab] = useState<string>('dispatch');
   const [isSimulatorOpen, setIsSimulatorOpen] = useState<boolean>(false);
   const [inspectedTicket, setInspectedTicket] = useState<Ticket | null>(null);
@@ -25,7 +26,15 @@ export default function App() {
   // Subscribe to storage changes for pure reactivity
   useEffect(() => {
     const handleStoreChange = () => {
-      setCurrentUser(store.getCurrentUser());
+      const next = store.getCurrentUser();
+      setCurrentUser(prev => {
+        // Land on the role's home tab right after signing in
+        if (next && (!prev || prev.role !== next.role)) {
+          setActiveTab(next.role === 'DISPATCHER' ? 'dispatch' : 'manager-dashboard');
+        }
+        return next;
+      });
+      setAuthStatus(store.getAuthStatus());
       setVersion(v => v + 1);
     };
 
@@ -33,19 +42,8 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Set default tab when user role changes
-  const handleUserChange = (newUser: User) => {
-    setCurrentUser(newUser);
-    if (newUser.role === 'DISPATCHER') {
-      setActiveTab('dispatch');
-    } else {
-      setActiveTab('manager-dashboard');
-    }
-  };
-
   const handleLogout = () => {
     store.logout();
-    setCurrentUser(null);
   };
 
   // Check URL query parameters for mobile technician portal (?tech=... or ?act=...)
@@ -66,9 +64,17 @@ export default function App() {
     );
   }
 
+  if (authStatus === 'LOADING') {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400 text-sm">
+        Chargement de votre espace…
+      </div>
+    );
+  }
+
   // If user is not logged in, display the secure LoginView
   if (!currentUser) {
-    return <LoginView onLoginSuccess={handleUserChange} />;
+    return <LoginView noProfile={authStatus === 'NO_PROFILE'} />;
   }
 
   // Calculate sum check for the active scope

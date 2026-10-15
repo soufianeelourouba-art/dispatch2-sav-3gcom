@@ -10,15 +10,15 @@ export interface DC {
 }
 
 // 2. Compte Utilisateur (Orienteur ou Manager)
+// Document Firestore users/{uid} : id = UID Firebase Auth. Le mot de passe n'est jamais stocké ici.
 export interface User {
   id: string;
-  username: string;
+  username: string; // = email de connexion
   name: string;
   role: Role;
   sectorId?: string; // Secteur principal ou actif
-  sectorIds?: string[]; // Liste de secteurs gérés par le même orienteur (1 orienteur peut gérer plusieurs secteurs)
+  sectorIds?: string[]; // Liste de secteurs gérés par le même orienteur (source de vérité des règles Firestore)
   activeSectorId?: string; // Secteur actuellement sélectionné dans l'interface
-  password?: string; // Mot de passe du compte
   email?: string;
   createdAt?: string;
 }
@@ -142,6 +142,7 @@ export type EventType =
 export interface TicketEvent {
   id: string;
   ticketId: string;
+  sectorId?: string | null; // Copie du secteur du ticket, pour le cloisonnement Firestore
   eventType: EventType;
   actorRole: 'SYSTEM' | 'DISPATCHER' | 'MANAGER' | 'TECHNICIAN';
   actorName: string;

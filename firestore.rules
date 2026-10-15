@@ -1,33 +1,112 @@
 rules_version = '2';
+
+// 3GCOM Dispatch SAV — server-side access control.
+// Every account needs a profile document users/{uid} (role + sectorIds), written by a manager.
+// MANAGER: full access. DISPATCHER (orienteur): only the data of its assigned sectors.
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Health check test doc
-    match /test/connection {
-      allow read, write: if true;
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function profilePath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+    function hasProfile() {
+      return signedIn() && exists(profilePath());
+    }
+    function profile() {
+      return get(profilePath()).data;
+    }
+    function isManager() {
+      return hasProfile() && profile().role == 'MANAGER';
+    }
+    function isDispatcher() {
+      return hasProfile() && profile().role == 'DISPATCHER';
+    }
+    function mySectors() {
+      return profile().get('sectorIds', []);
+    }
+    function inMySectors(sectorId) {
+      return sectorId != null && sectorId in mySectors();
     }
 
+    // --- Accounts: readable by their owner, managed by managers only (no self-promotion)
     match /users/{userId} {
-      allow read, write: if true;
+      allow read: if signedIn() && (request.auth.uid == userId || isManager());
+      allow write: if isManager();
     }
 
-    match /sectors/{sectorId} {
-      allow read, write: if true;
+    // --- Shared referential: visible to every account, edited by managers
+    match /dcs/{id} {
+      allow read: if hasProfile();
+      allow write: if isManager();
+    }
+    match /sectors/{id} {
+      allow read: if hasProfile();
+      allow write: if isManager();
+    }
+    match /technicalZones/{id} {
+      allow read: if hasProfile();
+      allow write: if isManager();
+    }
+    match /settings/{id} {
+      allow read: if hasProfile();
+      allow write: if isManager();
     }
 
-    match /technicalZones/{zoneId} {
-      allow read, write: if true;
+    // Orienteurs may map an unknown Excel label to a zone of their own sectors.
+    match /zoneAliases/{id} {
+      allow read: if hasProfile();
+      allow write: if isManager()
+        || (isDispatcher()
+            && inMySectors(get(/databases/$(database)/documents/technicalZones/$(request.resource.data.technicalZoneId)).data.sectorId));
     }
 
-    match /technicians/{technicianId} {
-      allow read, write: if true;
+    // --- Technicians: scoped by sectorIds
+    match /technicians/{id} {
+      allow read: if isManager()
+        || (isDispatcher() && resource.data.get('sectorIds', []).hasAny(mySectors()));
+      allow create: if isManager()
+        || (isDispatcher() && request.resource.data.get('sectorIds', []).hasAny(mySectors()));
+      allow update: if isManager()
+        || (isDispatcher()
+            && resource.data.get('sectorIds', []).hasAny(mySectors())
+            && request.resource.data.get('sectorIds', []).hasAny(mySectors()));
+      allow delete: if isManager()
+        || (isDispatcher() && resource.data.get('sectorIds', []).hasAny(mySectors()));
     }
 
-    match /tickets/{ticketId} {
-      allow read, write: if true;
+    // --- Tickets: scoped by sectorId. A ticket whose zone is unknown (sectorId null)
+    // can be imported by anyone but is only visible to managers until its zone is mapped.
+    match /tickets/{id} {
+      allow read: if isManager()
+        || (isDispatcher() && inMySectors(resource.data.get('sectorId', null)));
+      allow create: if isManager()
+        || (isDispatcher()
+            && (request.resource.data.get('sectorId', null) == null
+                || inMySectors(request.resource.data.sectorId)));
+      allow update: if isManager()
+        || (isDispatcher()
+            && inMySectors(resource.data.get('sectorId', null))
+            && inMySectors(request.resource.data.get('sectorId', null)));
+      allow delete: if isManager();
     }
 
-    match /settings/{settingId} {
-      allow read, write: if true;
+    // --- Ticket events: append-only audit trail
+    match /events/{id} {
+      allow read: if isManager()
+        || (isDispatcher() && inMySectors(resource.data.get('sectorId', null)));
+      allow create: if isManager()
+        || (isDispatcher()
+            && (request.resource.data.get('sectorId', null) == null
+                || inMySectors(request.resource.data.sectorId)));
+      // Only technician merges may rewrite who performed an event; content stays immutable.
+      allow update: if isManager()
+        || (isDispatcher()
+            && inMySectors(resource.data.get('sectorId', null))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['technicianId', 'technicianName']));
+      allow delete: if isManager();
     }
   }
 }
