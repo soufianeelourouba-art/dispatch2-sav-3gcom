@@ -264,7 +264,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
           <button
             onClick={handleValidateAndSend}
             disabled={dispatchableTickets.length === 0}
-            className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl shadow-sm transition-all whitespace-nowrap"
+            className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl shadow-sm transition-all whitespace-nowrap"
           >
             <Send className="w-4 h-4" />
             <span>Valider le dispatch ({dispatchableTickets.length} prêts)</span>
@@ -411,7 +411,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
           {onNavigateToSuivi && (
             <button
               onClick={onNavigateToSuivi}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors shrink-0 shadow-xs"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl transition-colors shrink-0 shadow-xs"
             >
               <span>Passer au Suivi en direct</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -460,7 +460,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
             {onNavigateToSuivi && (
               <button
                 onClick={onNavigateToSuivi}
-                className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors shadow-xs"
+                className="px-4 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl transition-colors shadow-xs"
               >
                 Aller au suivi en direct
               </button>

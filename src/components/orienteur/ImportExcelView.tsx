@@ -182,7 +182,7 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
         <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors"
+            className="px-5 py-2.5 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl shadow-xs transition-colors"
           >
             Parcourir mon ordinateur (.xlsx)
           </button>
@@ -282,7 +282,7 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
           <div className="text-right pt-2">
             <button
               onClick={() => onImportCompleted()}
-              className="px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors shadow-xs"
+              className="px-5 py-2.5 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl transition-colors shadow-xs"
             >
               Voir la file de dispatch de ce secteur →
             </button>

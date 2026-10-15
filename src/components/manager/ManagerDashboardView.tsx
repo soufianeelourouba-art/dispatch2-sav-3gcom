@@ -230,7 +230,7 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
           
           <button
             onClick={handleExportAll}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors shadow-xs cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl transition-colors shadow-xs cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export Excel (.xlsx)</span>
@@ -250,7 +250,7 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
               onClick={() => setSelectedSectorFilter('ALL')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 selectedSectorFilter === 'ALL'
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-brand-navy-900 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
@@ -364,7 +364,7 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
 
       {/* Operational Alerts Section (§3: "voir des alertes") */}
       <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
-        <div className="p-5 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="p-5 bg-brand-navy-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center">
               <Bell className="w-4 h-4" />
@@ -392,7 +392,7 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
             <button
               onClick={() => setActiveAlertCategory('ALL')}
               className={`px-3 py-1.5 rounded-lg transition-all ${
-                activeAlertCategory === 'ALL' ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-200'
+                activeAlertCategory === 'ALL' ? 'bg-brand-navy-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-200'
               }`}
             >
               Toutes ({totalAlertCount})

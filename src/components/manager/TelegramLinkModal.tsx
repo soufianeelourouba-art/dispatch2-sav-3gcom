@@ -121,7 +121,7 @@ export const TelegramLinkModal: React.FC<TelegramLinkModalProps> = ({ technician
       <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200">
         
         {/* Modal Header */}
-        <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+        <div className="bg-brand-navy-900 text-white p-5 flex items-center justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="p-1.5 bg-sky-500/20 text-sky-400 rounded-lg">

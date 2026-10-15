@@ -1,10 +1,30 @@
 @import "tailwindcss";
 
+/* 3GCOM brand: navy top bar, white logo, orange accent taken from the logo waves */
+@theme {
+  --color-brand-navy-950: #071528;
+  --color-brand-navy-900: #0b1f3a;
+  --color-brand-navy-800: #12294a;
+  --color-brand-navy-700: #1b365f;
+  --color-brand-orange-600: #d9741a;
+  --color-brand-orange-500: #e8892b;
+  --color-brand-orange-400: #f2a14f;
+  --color-brand-orange-50: #fff5eb;
+}
+
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     color: #0f172a;
     background-color: #f8fafc;
     -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Horizontal tab strip on small screens: scrollable without a visible scrollbar */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
   }
 }

@@ -82,7 +82,7 @@ export const SpecialQueuesView: React.FC<SpecialQueuesViewProps> = ({
           onClick={() => setActiveQueue('TO_ASSIGN')}
           className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
             activeQueue === 'TO_ASSIGN'
-              ? 'bg-slate-900 text-white shadow-xs'
+              ? 'bg-brand-navy-900 text-white shadow-xs'
               : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
           }`}
         >

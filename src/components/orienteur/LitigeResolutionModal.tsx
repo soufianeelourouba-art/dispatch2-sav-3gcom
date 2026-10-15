@@ -230,7 +230,7 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-sm"
+                  className="px-4 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-lg shadow-sm"
                 >
                   Valider le motif
                 </button>

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { User, Sector } from '../types';
+import React from 'react';
+import { User } from '../types';
 import { store } from '../services/storage';
-import { Smartphone, Shield, Radio, RefreshCw, ChevronDown, Check, LogOut, Building2, UserCheck, Users } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 interface NavbarProps {
   currentUser: User;
@@ -12,6 +12,26 @@ interface NavbarProps {
   onLogout?: () => void;
 }
 
+interface NavTab {
+  id: string;
+  label: string;
+}
+
+const DISPATCHER_TABS: NavTab[] = [
+  { id: 'dispatch', label: 'Dispatch du jour' },
+  { id: 'suivi', label: 'Suivi direct' },
+  { id: 'import', label: 'Importer Excel' },
+  { id: 'techniciens', label: 'Mes techniciens' },
+  { id: 'files', label: 'Files spéciales' },
+];
+
+const MANAGER_TABS: NavTab[] = [
+  { id: 'manager-dashboard', label: 'Vue Royaume' },
+  { id: 'referentiel', label: 'Référentiel' },
+  { id: 'techniciens', label: 'Techniciens' },
+  { id: 'import', label: 'Import Excel' },
+];
+
 export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   activeTab,
@@ -19,147 +39,69 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
 }) => {
   const userSectors = store.getSectors(currentUser);
+  const tabs = currentUser.role === 'DISPATCHER' ? DISPATCHER_TABS : MANAGER_TABS;
+  const roleLabel = currentUser.role === 'DISPATCHER'
+    ? userSectors.length > 1
+      ? `Orienteur · ${userSectors.length} secteurs`
+      : `Orienteur · ${userSectors[0]?.name || 'Secteur'}`
+    : 'Direction SAV · Manager';
+
+  const tabButton = (tab: NavTab, compact: boolean) => {
+    const isActive = activeTab === tab.id;
+    return (
+      <button
+        key={tab.id}
+        onClick={() => onTabChange(tab.id)}
+        aria-current={isActive ? 'page' : undefined}
+        className={`relative whitespace-nowrap font-semibold transition-colors cursor-pointer ${
+          compact ? 'px-3 py-2.5 text-xs' : 'px-3 h-16 text-[13px]'
+        } ${isActive ? 'text-white' : 'text-white/65 hover:text-white'}`}
+      >
+        {tab.label}
+        <span
+          className={`absolute left-3 right-3 bottom-0 h-[3px] rounded-t-full transition-colors ${
+            isActive ? 'bg-brand-orange-500' : 'bg-transparent'
+          }`}
+        />
+      </button>
+    );
+  };
 
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <header className="bg-brand-navy-900 sticky top-0 z-30 shadow-md shadow-brand-navy-950/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
-          
-          {/* Zone 1: Brand Wordmark */}
+
+          {/* Brand */}
           <div className="flex items-center gap-3 shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-emerald-700 flex items-center justify-center text-white font-bold text-sm tracking-tight shadow-sm">
-              3G
-            </div>
-            <div>
-              <span className="text-base font-bold text-slate-900 tracking-tight block leading-none">
-                3GCOM SAV
+            <img src="/brand/logo-3gcom-white.png" alt="3GCOM" className="h-10 w-auto" />
+            <div className="hidden sm:block border-l border-white/15 pl-3">
+              <span className="text-sm font-bold text-white tracking-tight block leading-none">
+                Dispatch SAV
               </span>
-              <span className="text-[11px] text-slate-700 font-medium tracking-wide">
-                Fibre Optique Maroc Telecom
+              <span className="text-[11px] text-white/55 font-medium">
+                Fibre optique
               </span>
             </div>
           </div>
 
-          {/* Zone 2: Navigation Links based on role */}
-          <nav className="hidden md:flex items-center gap-1 lg:gap-1.5">
-            {currentUser.role === 'DISPATCHER' ? (
-              <>
-                <button
-                  onClick={() => onTabChange('dispatch')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
-                    activeTab === 'dispatch'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  Dispatch du jour
-                </button>
-                <button
-                  onClick={() => onTabChange('suivi')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
-                    activeTab === 'suivi'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  Suivi direct
-                </button>
-                <button
-                  onClick={() => onTabChange('import')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
-                    activeTab === 'import'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  Importer Excel
-                </button>
-                <button
-                  onClick={() => onTabChange('techniciens')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                    activeTab === 'techniciens'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Mes Techniciens (Secteur)</span>
-                </button>
-                <button
-                  onClick={() => onTabChange('files')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
-                    activeTab === 'files'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  Files spéciales
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => onTabChange('manager-dashboard')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
-                    activeTab === 'manager-dashboard'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  Vue Royaume
-                </button>
-                <button
-                  onClick={() => onTabChange('referentiel')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                    activeTab === 'referentiel'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Architecture DC & Référentiel</span>
-                </button>
-                <button
-                  onClick={() => onTabChange('techniciens')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                    activeTab === 'techniciens'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Techniciens (National)</span>
-                </button>
-                <button
-                  onClick={() => onTabChange('import')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
-                    activeTab === 'import'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  Import Excel
-                </button>
-              </>
-            )}
+          {/* Navigation (desktop) */}
+          <nav className="hidden md:flex items-stretch self-stretch" aria-label="Navigation principale">
+            {tabs.map(tab => tabButton(tab, false))}
           </nav>
 
-          {/* Zone 3: Authenticated User Status & Logout */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-100 rounded-xl border border-slate-200">
-              <div className="w-7 h-7 rounded-lg bg-emerald-700 text-white flex items-center justify-center font-bold text-xs uppercase shadow-2xs">
+          {/* User & logout */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl">
+              <div className="w-8 h-8 rounded-full bg-brand-orange-500 text-white flex items-center justify-center font-bold text-xs uppercase">
                 {currentUser.name.charAt(0)}
               </div>
-              <div className="text-left hidden sm:block">
-                <div className="font-bold text-slate-900 text-xs leading-tight">
+              <div className="text-left hidden lg:block">
+                <div className="font-semibold text-white text-xs leading-tight">
                   {currentUser.name}
                 </div>
-                <div className="text-[10px] text-slate-600 font-medium leading-tight">
-                  {currentUser.role === 'DISPATCHER'
-                    ? userSectors.length > 1
-                      ? `Orienteur · ${userSectors.length} secteurs gérés`
-                      : `Orienteur · ${userSectors[0]?.name || 'Secteur'}`
-                    : 'Direction SAV · Manager'}
+                <div className="text-[10px] text-white/55 font-medium leading-tight">
+                  {roleLabel}
                 </div>
               </div>
             </div>
@@ -167,17 +109,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
-                title="Se déconnecter de la session"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+                title="Se déconnecter"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOut className="w-4 h-4" />
                 <span className="hidden sm:inline">Déconnexion</span>
               </button>
             )}
           </div>
-
         </div>
       </div>
+
+      {/* Navigation (mobile / tablet): scrollable tab strip */}
+      <nav
+        className="md:hidden flex overflow-x-auto scrollbar-none border-t border-white/10 bg-brand-navy-950 px-2"
+        aria-label="Navigation principale"
+      >
+        {tabs.map(tab => tabButton(tab, true))}
+      </nav>
     </header>
   );
 };

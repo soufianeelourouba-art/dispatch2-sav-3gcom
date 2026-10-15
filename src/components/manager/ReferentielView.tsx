@@ -484,7 +484,7 @@ export const ReferentielView: React.FC = () => {
         <button
           onClick={() => setActiveTab('HIERARCHY')}
           className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'HIERARCHY' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'HIERARCHY' ? 'bg-brand-navy-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Network className="w-3.5 h-3.5" />
@@ -493,7 +493,7 @@ export const ReferentielView: React.FC = () => {
         <button
           onClick={() => setActiveTab('DCS')}
           className={`px-3 py-1.5 rounded-lg transition-colors ${
-            activeTab === 'DCS' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'DCS' ? 'bg-brand-navy-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           1. Directions Régionales ({dcs.length})
@@ -501,7 +501,7 @@ export const ReferentielView: React.FC = () => {
         <button
           onClick={() => setActiveTab('SECTORS')}
           className={`px-3 py-1.5 rounded-lg transition-colors ${
-            activeTab === 'SECTORS' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'SECTORS' ? 'bg-brand-navy-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           2. Secteurs Géographiques ({sectors.length})
@@ -509,7 +509,7 @@ export const ReferentielView: React.FC = () => {
         <button
           onClick={() => setActiveTab('ZONES')}
           className={`px-3 py-1.5 rounded-lg transition-colors ${
-            activeTab === 'ZONES' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'ZONES' ? 'bg-brand-navy-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           3. Zones d'Intervention ({zones.length})
@@ -517,7 +517,7 @@ export const ReferentielView: React.FC = () => {
         <button
           onClick={() => setActiveTab('USERS')}
           className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'USERS' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'USERS' ? 'bg-brand-navy-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Lock className="w-3.5 h-3.5" />
@@ -526,7 +526,7 @@ export const ReferentielView: React.FC = () => {
         <button
           onClick={() => setActiveTab('ALIASES')}
           className={`px-3 py-1.5 rounded-lg transition-colors ${
-            activeTab === 'ALIASES' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'ALIASES' ? 'bg-brand-navy-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           Tolérance Libellés ({aliases.length})
@@ -534,7 +534,7 @@ export const ReferentielView: React.FC = () => {
         <button
           onClick={() => setActiveTab('TELEGRAM_CONFIG')}
           className={`px-3 py-1.5 rounded-lg transition-colors ${
-            activeTab === 'TELEGRAM_CONFIG' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'TELEGRAM_CONFIG' ? 'bg-brand-navy-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           Bot Telegram
@@ -583,7 +583,7 @@ export const ReferentielView: React.FC = () => {
                   {/* DC Level Header */}
                   <div
                     onClick={() => setExpandedDcs(prev => ({ ...prev, [dc.id]: !isDcOpen }))}
-                    className="p-4 bg-slate-900 text-white flex items-center justify-between cursor-pointer hover:bg-slate-800 transition-colors"
+                    className="p-4 bg-brand-navy-900 text-white flex items-center justify-between cursor-pointer hover:bg-slate-800 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       {isDcOpen ? <ChevronDown className="w-4 h-4 text-emerald-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
@@ -729,7 +729,7 @@ export const ReferentielView: React.FC = () => {
             <div className="flex justify-end pt-1">
               <button
                 type="submit"
-                className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors"
+                className="px-5 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl shadow-xs transition-colors"
               >
                 Ajouter la Direction
               </button>
@@ -856,7 +856,7 @@ export const ReferentielView: React.FC = () => {
             <div className="flex justify-end pt-1">
               <button
                 type="submit"
-                className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors"
+                className="px-5 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl shadow-xs transition-colors"
               >
                 Créer le Secteur
               </button>
@@ -998,7 +998,7 @@ export const ReferentielView: React.FC = () => {
             <div className="flex justify-end pt-1">
               <button
                 type="submit"
-                className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors"
+                className="px-5 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl shadow-xs transition-colors"
               >
                 Ajouter la Zone
               </button>
@@ -1177,7 +1177,7 @@ export const ReferentielView: React.FC = () => {
               <button
                 type="submit"
                 disabled={isCreatingUser}
-                className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors disabled:opacity-50"
+                className="px-5 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl shadow-xs transition-colors disabled:opacity-50"
               >
                 {isCreatingUser ? 'Création…' : 'Créer l\'utilisateur'}
               </button>
@@ -1304,7 +1304,7 @@ export const ReferentielView: React.FC = () => {
             <div className="flex justify-end pt-1">
               <button
                 type="submit"
-                className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors"
+                className="px-5 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl shadow-xs transition-colors"
               >
                 Créer la correspondance
               </button>
@@ -1380,7 +1380,7 @@ export const ReferentielView: React.FC = () => {
             type="button"
             onClick={handleConnectBot}
             disabled={isConnectingBot}
-            className="px-5 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors disabled:opacity-50"
+            className="px-5 py-2.5 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl shadow-xs transition-colors disabled:opacity-50"
           >
             {isConnectingBot ? 'Connexion en cours…' : 'Connecter le bot'}
           </button>

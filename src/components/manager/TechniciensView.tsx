@@ -278,7 +278,7 @@ export const TechniciensView: React.FC<TechniciensViewProps> = ({ currentUser })
 
           <button
             onClick={() => setActiveTab('NEW')}
-            className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors whitespace-nowrap self-start sm:self-auto"
+            className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl shadow-xs transition-colors whitespace-nowrap self-start sm:self-auto"
           >
             <UserPlus className="w-4 h-4" />
             <span>Ajouter un technicien</span>
@@ -351,7 +351,7 @@ export const TechniciensView: React.FC<TechniciensViewProps> = ({ currentUser })
         <button
           onClick={() => setActiveTab('LIST')}
           className={`px-3 py-1.5 rounded-lg transition-colors ${
-            activeTab === 'LIST' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+            activeTab === 'LIST' ? 'bg-brand-navy-900 text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           Liste des Techniciens ({allScopedTechnicians.length})
@@ -643,7 +643,7 @@ export const TechniciensView: React.FC<TechniciensViewProps> = ({ currentUser })
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors"
+              className="px-5 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl shadow-xs transition-colors"
             >
               Créer & Générer Lien Telegram
             </button>
@@ -843,7 +843,7 @@ export const TechniciensView: React.FC<TechniciensViewProps> = ({ currentUser })
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors"
+                  className="px-5 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl shadow-xs transition-colors"
                 >
                   Enregistrer les modifications
                 </button>

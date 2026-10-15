@@ -397,7 +397,7 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
           <button
             onClick={() => setSelectedStatusFilter('ALL')}
             className={`px-3 py-1.5 rounded-lg transition-all ${
-              selectedStatusFilter === 'ALL' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              selectedStatusFilter === 'ALL' ? 'bg-brand-navy-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
             Tous ({tickets.length})

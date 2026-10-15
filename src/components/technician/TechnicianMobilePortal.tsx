@@ -115,7 +115,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
 
   if (loadState === 'INVALID' || loadState === 'OFFLINE' || !tech) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-brand-navy-900 text-white flex flex-col items-center justify-center p-6 text-center">
         <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mb-4">
           <AlertTriangle className="w-8 h-8" />
         </div>
@@ -141,7 +141,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
 
   if (loadState === 'SUSPENDED') {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-brand-navy-900 text-white flex flex-col items-center justify-center p-6 text-center">
         <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mb-4">
           <AlertCircle className="w-8 h-8" />
         </div>

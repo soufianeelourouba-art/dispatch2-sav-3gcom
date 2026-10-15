@@ -64,7 +64,7 @@ export default function App() {
 
   if (authStatus === 'LOADING') {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400 text-sm">
+      <div className="min-h-screen bg-brand-navy-900 flex items-center justify-center text-white/60 text-sm">
         Chargement de votre espace…
       </div>
     );
