@@ -11,11 +11,10 @@ import {
   SumCheckResult,
   EventType,
   LitigeReasonCode,
-  SLAStatus,
   LITIGE_REASONS
 } from '../types';
 import { db, auth, createAuthAccount } from './firebase';
-import { computeTicketSLA, reduceTicketStatus, applyEventToTicket } from '../domain/tickets';
+import { computeTicketSLA, reduceTicketStatus, applyEventToTicket, computeSumCheck } from '../domain/tickets';
 import { notifyTechnicians } from './api';
 import {
   collection,
@@ -58,58 +57,6 @@ export function ticketDocId(ticketNumber: string): string {
 // Firestore rejects `undefined` field values.
 function clean<T extends object>(data: T): T {
   return Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined)) as T;
-}
-
-// --- Format SLA remaining text for clean display ---
-export function formatSLADisplay(remainingHours: number, status: SLAStatus): { text: string; label: string } {
-  if (status === 'EXPIRED') {
-    const overdue = Math.abs(remainingHours);
-    const hours = Math.floor(overdue);
-    const mins = Math.round((overdue - hours) * 60);
-    return {
-      text: `${hours}h${mins > 0 ? mins.toString().padStart(2, '0') : ''}`,
-      label: `En retard de ${hours}h${mins > 0 ? mins : ''}`,
-    };
-  }
-
-  const hours = Math.floor(remainingHours);
-  const mins = Math.round((remainingHours - hours) * 60);
-  return {
-    text: `${hours}h${mins > 0 ? mins.toString().padStart(2, '0') : ''}`,
-    label: `Reste ${hours}h${mins > 0 ? mins : ''}`,
-  };
-}
-
-// --- Invariant 5: Timezone formatting (Africa/Casablanca) ---
-export function formatCasablancaDateTime(utcIsoString: string | undefined): string {
-  if (!utcIsoString) return '—';
-  try {
-    const date = new Date(utcIsoString);
-    return new Intl.DateTimeFormat('fr-FR', {
-      timeZone: 'Africa/Casablanca',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  } catch {
-    return utcIsoString;
-  }
-}
-
-export function formatCasablancaTimeOnly(utcIsoString: string | undefined): string {
-  if (!utcIsoString) return '—';
-  try {
-    const date = new Date(utcIsoString);
-    return new Intl.DateTimeFormat('fr-FR', {
-      timeZone: 'Africa/Casablanca',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  } catch {
-    return utcIsoString;
-  }
 }
 
 // Technicians are queried by `sectorIds`, so it must always contain the primary sector.
@@ -972,67 +919,7 @@ class AppStateStore {
 
   // --- Strict Sum Check Invariant ---
   public computeSumCheck(requestingUser?: User | null): SumCheckResult {
-    const tickets = this.getTickets(requestingUser);
-    const totalTickets = tickets.length;
-
-    let toAssign = 0;
-    let zoneToMap = 0;
-    let assigned = 0;
-    let reopened = 0;
-    let completed = 0;
-    let litige = 0;
-
-    const culpritTickets: { id: string; ticketNumber: string; reason: string }[] = [];
-
-    tickets.forEach(t => {
-      switch (t.currentStatus) {
-        case 'TO_ASSIGN':
-        case 'PROPOSED':
-          toAssign++;
-          break;
-        case 'ZONE_TO_MAP':
-          zoneToMap++;
-          break;
-        case 'ASSIGNED':
-          assigned++;
-          break;
-        case 'REOPENED':
-          reopened++;
-          break;
-        case 'COMPLETED':
-          completed++;
-          break;
-        case 'LITIGE':
-          litige++;
-          break;
-        default:
-          culpritTickets.push({
-            id: t.id,
-            ticketNumber: t.ticketNumber,
-            reason: `Statut inconnu : ${(t as any).currentStatus}`,
-          });
-      }
-    });
-
-    const sumOfCategories = toAssign + zoneToMap + assigned + reopened + completed + litige;
-    const isBalanced = sumOfCategories === totalTickets;
-    const discrepancy = totalTickets - sumOfCategories;
-
-    return {
-      totalTickets,
-      sumOfCategories,
-      isBalanced,
-      discrepancy,
-      breakdown: {
-        toAssign,
-        zoneToMap,
-        assigned,
-        reopened,
-        completed,
-        litige,
-      },
-      culpritTickets,
-    };
+    return computeSumCheck(this.getTickets(requestingUser));
   }
 }
 

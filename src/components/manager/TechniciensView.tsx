@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Technician, TechnicalZone, Sector, User, DC } from '../../types';
-import { store, formatCasablancaDateTime } from '../../services/storage';
+import { store } from '../../services/storage';
+import { formatCasablancaDateTime } from '../../domain/format';
 import { 
   Users, 
   UserPlus, 

@@ -1,98 +1,10 @@
 import * as XLSX from 'xlsx';
-import { ImportReport, RejectedRow, Ticket, TechnicalZone, ZoneAlias } from '../types';
+import { ImportReport, RejectedRow } from '../types';
 import { store } from './storage';
+import { detectHeaders, interpretRows, DetectedColumns, InterpretedRow } from '../domain/excelImport';
 
-// Flexible column matching dictionary
-const COLUMN_ALIASES = {
-  ticketNumber: [
-    'n° réclam.', 'n° reclam', 'n° réclamation', 'numero reclamation', 'num reclamation',
-    'ticket', 'n° ticket', 'num ticket', 'reference', 'ref ticket', 'id reclamation',
-    'n° de réclamation', 'numero de ticket', 'code réclamation', 'code reclamation'
-  ],
-  clientNumber: [
-    'numéro client', 'numero client', 'n° client', 'num client', 'code client',
-    'id client', 'identifiant client', 'abonne', 'abonné', 'n° abonné', 'code abonné'
-  ],
-  clientName: [
-    'nom client', 'nom abonné', 'nom abonne', 'client', 'nom du client', 'titulaire',
-    'nom et prénom', 'nom prénom', 'abonne nom', 'raison sociale'
-  ],
-  clientPhone: [
-    'téléphone', 'telephone', 'tel', 'gsm', 'mobile', 'tel client', 'numéro tel',
-    'num tel', 'contact', 'tel contact', 'téléphone client'
-  ],
-  clientAddress: [
-    'adresse', 'adresse client', 'adresse d\'installation', 'adresse installation',
-    'localisation', 'domicile', 'lieu', 'adresse complète', 'quartier'
-  ],
-  zoneText: [
-    'zone technique', 'zone', 'msan', 'repartiteur', 'répartiteur', 'zone msan',
-    'central', 'secteur technique', 'msan code', 'nom msan', 'zone intervention'
-  ],
-  registeredAt: [
-    'date d\'enregistrement', 'date enregistrement', 'date réclamation', 'date reclamation',
-    'date création', 'date creation', 'date', 'date heure', 'date ouverture', 'horodatage'
-  ],
-};
-
-function normalizeHeader(header: string): string {
-  return header
-    .toString()
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // remove accents
-    .replace(/[^a-z0-9]/g, ' ');
-}
-
-export interface DetectedColumns {
-  ticketNumberCol?: string;
-  clientNumberCol?: string;
-  clientNameCol?: string;
-  clientPhoneCol?: string;
-  clientAddressCol?: string;
-  zoneTextCol?: string;
-  registeredAtCol?: string;
-}
-
-export interface InterpretedRow {
-  rowNumber: number;
-  ticketNumber: string;
-  clientNumber: string;
-  clientName: string;
-  clientPhone: string;
-  clientAddress: string;
-  rawZoneText: string;
-  resolvedZoneId?: string;
-  resolvedZoneLabel?: string;
-  resolvedSectorId?: string;
-  resolvedSectorName?: string;
-  registeredAt: string;
-  isValid: boolean;
-  rejectionReason?: string;
-}
-
-export function detectHeaders(rawHeaders: string[]): DetectedColumns {
-  const result: DetectedColumns = {};
-
-  rawHeaders.forEach(origHeader => {
-    const normalized = normalizeHeader(origHeader);
-
-    for (const [key, aliases] of Object.entries(COLUMN_ALIASES)) {
-      if ((result as any)[key + 'Col']) continue;
-
-      for (const alias of aliases) {
-        const normAlias = normalizeHeader(alias);
-        if (normalized === normAlias || normalized.includes(normAlias) || normAlias.includes(normalized)) {
-          (result as any)[key + 'Col'] = origHeader;
-          break;
-        }
-      }
-    }
-  });
-
-  return result;
-}
+export { detectHeaders };
+export type { DetectedColumns, InterpretedRow };
 
 export function parseExcelBuffer(
   buffer: ArrayBuffer,
@@ -119,129 +31,13 @@ export function parseExcelBuffer(
   const headers = Object.keys(rawRows[0]);
   const detected = detectHeaders(headers);
 
-  const allSectors = store.getSectors();
-  const allZones = store.getTechnicalZones();
-  const allAliases = store.getZoneAliases();
-
-  const targetSector = allSectors.find(s => s.id === targetSectorId);
-  const targetSectorName = targetSector ? targetSector.name : 'Secteur indéfini';
-  
-  // Zones appartenant strictement au secteur sélectionné
-  const sectorZones = allZones.filter(z => z.sectorId === targetSectorId);
-  const sectorZoneIds = new Set(sectorZones.map(z => z.id));
-
-  // Helper to match raw zone to a zone of the selected sector
-  function resolveZoneForSector(raw: string): { 
-    zoneId?: string; 
-    zoneLabel?: string; 
-    isCrossSector?: boolean;
-    crossSectorName?: string;
-  } {
-    if (!raw) return {};
-    const cleanRaw = raw.trim().toUpperCase();
-
-    // 1. Direct match on zones in this target sector
-    const directSectorMatch = sectorZones.find(
-      z => z.label.toUpperCase() === cleanRaw || z.msanCode.toUpperCase() === cleanRaw
-    );
-    if (directSectorMatch) {
-      return {
-        zoneId: directSectorMatch.id,
-        zoneLabel: directSectorMatch.label,
-      };
-    }
-
-    // 2. Match on aliases pointing to a zone in this sector
-    const aliasMatch = allAliases.find(a => a.rawLabel.toUpperCase() === cleanRaw);
-    if (aliasMatch && sectorZoneIds.has(aliasMatch.technicalZoneId)) {
-      const matchedZone = sectorZones.find(z => z.id === aliasMatch.technicalZoneId);
-      if (matchedZone) {
-        return {
-          zoneId: matchedZone.id,
-          zoneLabel: matchedZone.label,
-        };
-      }
-    }
-
-    // 3. Check if the raw text actually belongs to ANOTHER sector (cross-sector violation)
-    const otherZone = allZones.find(
-      z => z.sectorId !== targetSectorId && (z.label.toUpperCase() === cleanRaw || z.msanCode.toUpperCase() === cleanRaw)
-    );
-    if (otherZone) {
-      const otherSec = allSectors.find(s => s.id === otherZone.sectorId);
-      return {
-        isCrossSector: true,
-        crossSectorName: otherSec ? otherSec.name : 'Autre secteur',
-      };
-    }
-
-    // Check alias pointing to another sector
-    if (aliasMatch && !sectorZoneIds.has(aliasMatch.technicalZoneId)) {
-      const otherTargetZone = allZones.find(z => z.id === aliasMatch.technicalZoneId);
-      const otherSec = otherTargetZone ? allSectors.find(s => s.id === otherTargetZone.sectorId) : null;
-      return {
-        isCrossSector: true,
-        crossSectorName: otherSec ? otherSec.name : 'Autre secteur',
-      };
-    }
-
-    return {};
-  }
-
-  // Interpret all rows
-  const interpretedRows: InterpretedRow[] = rawRows.map((row, idx) => {
-    const rowNum = idx + 2; // +1 for 0-index, +1 for header line
-    const ticketNumber = detected.ticketNumberCol ? String(row[detected.ticketNumberCol]).trim() : '';
-    const clientNumber = detected.clientNumberCol ? String(row[detected.clientNumberCol]).trim() : '';
-    const clientName = detected.clientNameCol ? String(row[detected.clientNameCol]).trim() : 'Client 3GCOM';
-    const clientPhone = detected.clientPhoneCol ? String(row[detected.clientPhoneCol]).trim() : '';
-    const clientAddress = detected.clientAddressCol ? String(row[detected.clientAddressCol]).trim() : '';
-    const rawZoneText = detected.zoneTextCol ? String(row[detected.zoneTextCol]).trim() : '';
-    const rawDate = detected.registeredAtCol ? row[detected.registeredAtCol] : '';
-
-    let formattedDate = new Date().toISOString();
-    if (rawDate) {
-      const parsed = new Date(rawDate);
-      if (!isNaN(parsed.getTime())) {
-        formattedDate = parsed.toISOString();
-      }
-    }
-
-    // Validation checks
-    let isValid = true;
-    let rejectionReason: string | undefined;
-
-    if (!ticketNumber) {
-      isValid = false;
-      rejectionReason = 'Numéro de réclamation/ticket manquant';
-    } else if (!clientNumber && !clientPhone) {
-      isValid = false;
-      rejectionReason = 'Identifiant client et numéro de téléphone absents';
-    }
-
-    const { zoneId, zoneLabel, isCrossSector, crossSectorName } = resolveZoneForSector(rawZoneText);
-
-    if (isCrossSector) {
-      isValid = false;
-      rejectionReason = `Zone "${rawZoneText}" appartient à [${crossSectorName}], hors du secteur choisi [${targetSectorName}]. Fichier réservé au secteur ${targetSectorName}.`;
-    }
-
-    return {
-      rowNumber: rowNum,
-      ticketNumber,
-      clientNumber: clientNumber || 'N/A',
-      clientName,
-      clientPhone,
-      clientAddress,
-      rawZoneText: rawZoneText || 'NON_SPECIFIE',
-      resolvedZoneId: zoneId,
-      resolvedZoneLabel: zoneLabel,
-      resolvedSectorId: targetSectorId,
-      resolvedSectorName: targetSectorName,
-      registeredAt: formattedDate,
-      isValid,
-      rejectionReason,
-    };
+  const sectors = store.getSectors();
+  const targetSectorName = sectors.find(s => s.id === targetSectorId)?.name || 'Secteur indéfini';
+  const interpretedRows = interpretRows(rawRows, detected, {
+    targetSectorId,
+    sectors,
+    zones: store.getTechnicalZones(),
+    aliases: store.getZoneAliases(),
   });
 
   const previewRows = interpretedRows.slice(0, 10);

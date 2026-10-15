@@ -1,5 +1,8 @@
 {
-  "regions": ["cdg1"],
+  "buildCommand": "npm run ci",
+  "regions": [
+    "cdg1"
+  ],
   "rewrites": [
     {
       "source": "/((?!api/).*)",

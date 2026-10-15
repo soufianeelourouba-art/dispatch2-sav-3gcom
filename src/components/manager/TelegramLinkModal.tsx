@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Technician } from '../../types';
 import { telegramBotService } from '../../services/telegramBotService';
-import { store, formatCasablancaDateTime } from '../../services/storage';
+import { store } from '../../services/storage';
+import { formatCasablancaDateTime } from '../../domain/format';
 import { 
   X, 
   Send, 

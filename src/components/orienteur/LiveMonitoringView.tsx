@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Ticket, Technician, User } from '../../types';
-import { store, formatCasablancaDateTime, formatCasablancaTimeOnly, formatSLADisplay } from '../../services/storage';
+import { store } from '../../services/storage';
+import { formatCasablancaDateTime, formatCasablancaTimeOnly, formatSLADisplay } from '../../domain/format';
 import { exportTicketsToExcel } from '../../services/excelExporter';
 import { LitigeResolutionModal } from './LitigeResolutionModal';
 import { 

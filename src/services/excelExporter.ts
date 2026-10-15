@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { Ticket, Technician, Sector } from '../types';
-import { formatCasablancaDateTime } from './storage';
+import { formatCasablancaDateTime } from '../domain/format';
 
 export function exportTicketsToExcel(tickets: Ticket[], fileName: string = 'tickets_3gcom.xlsx') {
   const rows = tickets.map(t => ({

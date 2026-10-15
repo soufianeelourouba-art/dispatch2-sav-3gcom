@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Ticket, Technician, User, TechnicalZone, SLAStatus } from '../../types';
-import { store, formatCasablancaDateTime, formatSLADisplay } from '../../services/storage';
+import { store } from '../../services/storage';
+import { formatCasablancaDateTime, formatSLADisplay } from '../../domain/format';
 import { calculateDispatchProposals } from '../../services/dispatchEngine';
 import { telegramGateway } from '../../services/telegramSimulator';
 import { LitigeResolutionModal } from './LitigeResolutionModal';

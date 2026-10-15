@@ -1,6 +1,6 @@
 // Pure ticket rules, shared by the browser (storage.ts) and the server (api/).
 // No Firebase or browser imports here.
-import type { SLAStatus, Ticket, TicketEvent, TicketStatus } from '../types';
+import type { SLAStatus, SumCheckResult, Ticket, TicketEvent, TicketStatus } from '../types';
 
 // --- SLA Invariant (24-Hour Strict SLA) ---
 export function computeTicketSLA(registeredAt: string): {
@@ -141,4 +141,68 @@ export function formatTicketMessage(ticket: Ticket): string {
     `\n━━━━━━━━━━━━━━━━━━━━━━━━\n` +
     `<i>Répondez avec l'un des boutons ci-dessous.</i>`
   );
+}
+
+// --- Strict Sum Check Invariant: every ticket is counted in exactly one category ---
+export function computeSumCheck(tickets: Ticket[]): SumCheckResult {
+  const totalTickets = tickets.length;
+
+  let toAssign = 0;
+  let zoneToMap = 0;
+  let assigned = 0;
+  let reopened = 0;
+  let completed = 0;
+  let litige = 0;
+
+  const culpritTickets: { id: string; ticketNumber: string; reason: string }[] = [];
+
+  tickets.forEach(t => {
+    switch (t.currentStatus) {
+      case 'TO_ASSIGN':
+      case 'PROPOSED':
+        toAssign++;
+        break;
+      case 'ZONE_TO_MAP':
+        zoneToMap++;
+        break;
+      case 'ASSIGNED':
+        assigned++;
+        break;
+      case 'REOPENED':
+        reopened++;
+        break;
+      case 'COMPLETED':
+        completed++;
+        break;
+      case 'LITIGE':
+        litige++;
+        break;
+      default:
+        culpritTickets.push({
+          id: t.id,
+          ticketNumber: t.ticketNumber,
+          reason: `Statut inconnu : ${(t as any).currentStatus}`,
+        });
+    }
+  });
+
+  const sumOfCategories = toAssign + zoneToMap + assigned + reopened + completed + litige;
+  const isBalanced = sumOfCategories === totalTickets;
+  const discrepancy = totalTickets - sumOfCategories;
+
+  return {
+    totalTickets,
+    sumOfCategories,
+    isBalanced,
+    discrepancy,
+    breakdown: {
+      toAssign,
+      zoneToMap,
+      assigned,
+      reopened,
+      completed,
+      litige,
+    },
+    culpritTickets,
+  };
 }

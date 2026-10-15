@@ -1,6 +1,7 @@
 import React from 'react';
 import { Ticket, TicketEvent } from '../types';
-import { store, formatCasablancaDateTime } from '../services/storage';
+import { store } from '../services/storage';
+import { formatCasablancaDateTime } from '../domain/format';
 import { 
   X, 
   Clock, 

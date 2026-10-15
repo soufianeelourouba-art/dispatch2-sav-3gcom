@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DC, Sector, TechnicalZone, ZoneAlias, User, Technician } from '../../types';
-import { store, formatCasablancaDateTime } from '../../services/storage';
+import { store } from '../../services/storage';
+import { formatCasablancaDateTime } from '../../domain/format';
 import { 
   Building2, 
   MapPin, 
