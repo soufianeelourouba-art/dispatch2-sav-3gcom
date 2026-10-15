@@ -1,8 +1,8 @@
 // Pure interpretation of an imported claims file (rows already read from Excel/CSV).
 // No Firebase or XLSX dependency, so every rule here is unit-tested.
 import type { Sector, TechnicalZone, ZoneAlias } from '../types';
-import { moroccoOffsetMs, moroccoToUtc } from './moroccoTime';
-import { normalizeSplitterRef } from './splitter';
+import { moroccoOffsetMs, moroccoToUtc } from './moroccoTime.js';
+import { normalizeSplitterRef } from './splitter.js';
 
 export const COLUMN_ALIASES = {
   ticketNumber: [

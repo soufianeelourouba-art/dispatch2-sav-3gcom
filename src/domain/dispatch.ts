@@ -1,6 +1,6 @@
 // Pure dispatch rules: which technician should receive each ticket.
 import type { DispatchProposal, Technician, Ticket } from '../types';
-import { splitterKey } from './splitter';
+import { splitterKey } from './splitter.js';
 
 export interface DispatchSimulationResult {
   proposals: DispatchProposal[];

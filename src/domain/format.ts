@@ -1,6 +1,6 @@
 // Display helpers (French labels, Africa/Casablanca time zone).
 import type { SLAStatus } from '../types';
-import { toMoroccoWallClock } from './moroccoTime';
+import { toMoroccoWallClock } from './moroccoTime.js';
 
 // --- Format SLA remaining text for clean display ---
 export function formatSLADisplay(remainingHours: number, status: SLAStatus): { text: string; label: string } {

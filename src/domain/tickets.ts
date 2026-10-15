@@ -1,7 +1,7 @@
 // Pure ticket rules, shared by the browser (storage.ts) and the server (api/).
 // No Firebase or browser imports here.
 import type { ManualTicketNature, SLAStatus, SumCheckResult, Ticket, TicketEvent, TicketStatus } from '../types';
-import { MANUAL_TICKET_NATURES } from '../types';
+import { MANUAL_TICKET_NATURES } from '../types/index.js';
 
 // --- SLA Invariant (24-Hour Strict SLA) ---
 export function computeTicketSLA(registeredAt: string): {
