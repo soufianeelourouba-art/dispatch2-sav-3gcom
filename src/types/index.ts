@@ -1,28 +1,46 @@
 export type Role = 'DISPATCHER' | 'MANAGER';
 
+// 1. Direction Centrale / Délégation Régionale (DC)
+export interface DC {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+}
+
+// 2. Compte Utilisateur (Orienteur ou Manager)
 export interface User {
   id: string;
   username: string;
   name: string;
   role: Role;
-  sectorId?: string; // Strictly required if role is DISPATCHER
+  sectorId?: string; // Secteur principal ou actif
+  sectorIds?: string[]; // Liste de secteurs gérés par le même orienteur (1 orienteur peut gérer plusieurs secteurs)
+  activeSectorId?: string; // Secteur actuellement sélectionné dans l'interface
   password?: string; // Mot de passe du compte
   email?: string;
   createdAt?: string;
 }
 
+// 3. Secteur Géographique (Appartient à une DC)
 export interface Sector {
   id: string;
+  dcId: string; // Appartient à une DC
+  dcName?: string;
   code: string;
   name: string;
-  dispatcherId?: string;
+  dispatcherId?: string; // Orienteur principal affecté au secteur
+  dispatcherIds?: string[]; // Liste des orienteurs affectés à ce secteur
   dispatcherName?: string;
   createdAt: string;
 }
 
+// 4. Zone d'Intervention Technique (Appartient à un Secteur)
 export interface TechnicalZone {
   id: string;
-  sectorId: string;
+  sectorId: string; // Appartient à un secteur
+  dcId?: string; // DC parente
   msanCode: string;
   label: string;
   description?: string;
@@ -37,9 +55,11 @@ export interface ZoneAlias {
 
 export type TelegramActivationStatus = 'PENDING' | 'ACTIVATED' | 'REVOKED';
 
+// 5. Technicien (Affecté à un secteur et à une ou plusieurs Zones d'intervention)
 export interface Technician {
   id: string;
-  sectorId: string;
+  sectorId: string; // Secteur d'appartenance (intra-secteur)
+  sectorIds?: string[]; // Secteurs secondaires éventuels
   fullName: string;
   normalizedName: string;
   phone: string;
@@ -49,7 +69,7 @@ export interface Technician {
   telegramActivationStatus?: TelegramActivationStatus;
   telegramActivatedAt?: string;
   telegramLinkDisabled?: boolean;
-  zoneIds: string[]; // List of TechnicalZone IDs
+  zoneIds: string[]; // Liste des IDs de Zones d'intervention couvertes (multi-zones)
   isActive: boolean;
   notes?: string;
   createdAt: string;

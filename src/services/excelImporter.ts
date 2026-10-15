@@ -27,7 +27,7 @@ const COLUMN_ALIASES = {
   ],
   zoneText: [
     'zone technique', 'zone', 'msan', 'repartiteur', 'répartiteur', 'zone msan',
-    'central', 'secteur technique', 'msan code', 'nom msan'
+    'central', 'secteur technique', 'msan code', 'nom msan', 'zone intervention'
   ],
   registeredAt: [
     'date d\'enregistrement', 'date enregistrement', 'date réclamation', 'date reclamation',
@@ -63,7 +63,9 @@ export interface InterpretedRow {
   clientPhone: string;
   clientAddress: string;
   rawZoneText: string;
+  resolvedZoneId?: string;
   resolvedZoneLabel?: string;
+  resolvedSectorId?: string;
   resolvedSectorName?: string;
   registeredAt: string;
   isValid: boolean;
@@ -94,8 +96,9 @@ export function detectHeaders(rawHeaders: string[]): DetectedColumns {
 
 export function parseExcelBuffer(
   buffer: ArrayBuffer,
-  currentSectorId?: string
+  targetSectorId: string
 ): {
+  targetSectorName: string;
   detectedColumns: DetectedColumns;
   headers: string[];
   totalRawRows: number;
@@ -116,42 +119,70 @@ export function parseExcelBuffer(
   const headers = Object.keys(rawRows[0]);
   const detected = detectHeaders(headers);
 
-  const zones = store.getTechnicalZones();
-  const aliases = store.getZoneAliases();
-  const sectors = store.getSectors();
+  const allSectors = store.getSectors();
+  const allZones = store.getTechnicalZones();
+  const allAliases = store.getZoneAliases();
 
-  // Helper to match a raw zone string to a known technical zone
-  function resolveZone(raw: string): { zoneId?: string; sectorId?: string; zoneLabel?: string; sectorName?: string } {
+  const targetSector = allSectors.find(s => s.id === targetSectorId);
+  const targetSectorName = targetSector ? targetSector.name : 'Secteur indéfini';
+  
+  // Zones appartenant strictement au secteur sélectionné
+  const sectorZones = allZones.filter(z => z.sectorId === targetSectorId);
+  const sectorZoneIds = new Set(sectorZones.map(z => z.id));
+
+  // Helper to match raw zone to a zone of the selected sector
+  function resolveZoneForSector(raw: string): { 
+    zoneId?: string; 
+    zoneLabel?: string; 
+    isCrossSector?: boolean;
+    crossSectorName?: string;
+  } {
     if (!raw) return {};
     const cleanRaw = raw.trim().toUpperCase();
 
-    // 1. Direct match on label or msanCode
-    const directMatch = zones.find(
+    // 1. Direct match on zones in this target sector
+    const directSectorMatch = sectorZones.find(
       z => z.label.toUpperCase() === cleanRaw || z.msanCode.toUpperCase() === cleanRaw
     );
-    if (directMatch) {
-      const sec = sectors.find(s => s.id === directMatch.sectorId);
+    if (directSectorMatch) {
       return {
-        zoneId: directMatch.id,
-        sectorId: directMatch.sectorId,
-        zoneLabel: directMatch.label,
-        sectorName: sec?.name,
+        zoneId: directSectorMatch.id,
+        zoneLabel: directSectorMatch.label,
       };
     }
 
-    // 2. Match on aliases table
-    const aliasMatch = aliases.find(a => a.rawLabel.toUpperCase() === cleanRaw);
-    if (aliasMatch) {
-      const targetZone = zones.find(z => z.id === aliasMatch.technicalZoneId);
-      if (targetZone) {
-        const sec = sectors.find(s => s.id === targetZone.sectorId);
+    // 2. Match on aliases pointing to a zone in this sector
+    const aliasMatch = allAliases.find(a => a.rawLabel.toUpperCase() === cleanRaw);
+    if (aliasMatch && sectorZoneIds.has(aliasMatch.technicalZoneId)) {
+      const matchedZone = sectorZones.find(z => z.id === aliasMatch.technicalZoneId);
+      if (matchedZone) {
         return {
-          zoneId: targetZone.id,
-          sectorId: targetZone.sectorId,
-          zoneLabel: targetZone.label,
-          sectorName: sec?.name,
+          zoneId: matchedZone.id,
+          zoneLabel: matchedZone.label,
         };
       }
+    }
+
+    // 3. Check if the raw text actually belongs to ANOTHER sector (cross-sector violation)
+    const otherZone = allZones.find(
+      z => z.sectorId !== targetSectorId && (z.label.toUpperCase() === cleanRaw || z.msanCode.toUpperCase() === cleanRaw)
+    );
+    if (otherZone) {
+      const otherSec = allSectors.find(s => s.id === otherZone.sectorId);
+      return {
+        isCrossSector: true,
+        crossSectorName: otherSec ? otherSec.name : 'Autre secteur',
+      };
+    }
+
+    // Check alias pointing to another sector
+    if (aliasMatch && !sectorZoneIds.has(aliasMatch.technicalZoneId)) {
+      const otherTargetZone = allZones.find(z => z.id === aliasMatch.technicalZoneId);
+      const otherSec = otherTargetZone ? allSectors.find(s => s.id === otherTargetZone.sectorId) : null;
+      return {
+        isCrossSector: true,
+        crossSectorName: otherSec ? otherSec.name : 'Autre secteur',
+      };
     }
 
     return {};
@@ -188,7 +219,12 @@ export function parseExcelBuffer(
       rejectionReason = 'Identifiant client et numéro de téléphone absents';
     }
 
-    const { zoneId, sectorId, zoneLabel, sectorName } = resolveZone(rawZoneText);
+    const { zoneId, zoneLabel, isCrossSector, crossSectorName } = resolveZoneForSector(rawZoneText);
+
+    if (isCrossSector) {
+      isValid = false;
+      rejectionReason = `Zone "${rawZoneText}" appartient à [${crossSectorName}], hors du secteur choisi [${targetSectorName}]. Fichier réservé au secteur ${targetSectorName}.`;
+    }
 
     return {
       rowNumber: rowNum,
@@ -198,8 +234,10 @@ export function parseExcelBuffer(
       clientPhone,
       clientAddress,
       rawZoneText: rawZoneText || 'NON_SPECIFIE',
+      resolvedZoneId: zoneId,
       resolvedZoneLabel: zoneLabel,
-      resolvedSectorName: sectorName,
+      resolvedSectorId: targetSectorId,
+      resolvedSectorName: targetSectorName,
       registeredAt: formattedDate,
       isValid,
       rejectionReason,
@@ -225,10 +263,7 @@ export function parseExcelBuffer(
         return;
       }
 
-      const { zoneId, sectorId } = resolveZone(item.rawZoneText);
-      const effectiveSectorId = sectorId || currentSectorId;
-
-      if (!zoneId) {
+      if (!item.resolvedZoneId) {
         unmappedZoneCount++;
       }
 
@@ -239,8 +274,8 @@ export function parseExcelBuffer(
         clientPhone: item.clientPhone,
         clientAddress: item.clientAddress,
         rawZoneText: item.rawZoneText,
-        technicalZoneId: zoneId,
-        sectorId: effectiveSectorId,
+        technicalZoneId: item.resolvedZoneId,
+        sectorId: targetSectorId,
         registeredAt: item.registeredAt,
         visitCount: 1,
       });
@@ -264,6 +299,7 @@ export function parseExcelBuffer(
   };
 
   return {
+    targetSectorName,
     detectedColumns: detected,
     headers,
     totalRawRows: rawRows.length,
@@ -272,78 +308,94 @@ export function parseExcelBuffer(
   };
 }
 
-// Generates a mock sample Excel workbook for immediate testing (§3)
-export function generateSampleExcelFile(): Uint8Array {
+// Generates a mock sample Excel workbook for immediate testing per sector
+export function generateSampleExcelFile(targetSectorId?: string): Uint8Array {
+  const sectors = store.getSectors();
+  const zones = store.getTechnicalZones();
+
+  const selectedSector = targetSectorId 
+    ? sectors.find(s => s.id === targetSectorId) || sectors[0]
+    : sectors[0];
+
+  const sectorZones = zones.filter(z => z.sectorId === selectedSector?.id);
+  const zoneList = sectorZones.length > 0 
+    ? sectorZones 
+    : [{ label: 'Zone Principale', msanCode: 'MSAN-01' }];
+
+  const z1 = zoneList[0]?.label || 'Zone 1';
+  const z2 = zoneList[1]?.label || z1;
+  const z3 = zoneList[2]?.label || z1;
+
   const data = [
     {
-      'N° Réclamation': 'REC-2026-9901',
-      'Code Client': 'ABN-CAS-77102',
+      'N° Réclamation': `REC-2026-${Math.floor(1000 + Math.random() * 8999)}`,
+      'Code Client': 'ABN-3G-77102',
       'Nom Abonné': 'Karim Bensouda',
       'Téléphone': '06 61 22 33 44',
-      'Adresse Client': '12 Bd Chefchaouni, Ain Sebaa',
-      'Zone MSAN': 'Ain Sebaa',
+      'Adresse Client': `Résidence Al Mansour, ${z1}`,
+      'Zone MSAN': z1,
       'Date Enregistrement': '2026-10-14 08:30',
     },
     {
-      'N° Réclamation': 'REC-2026-9902',
-      'Code Client': 'ABN-CAS-77105',
+      'N° Réclamation': `REC-2026-${Math.floor(1000 + Math.random() * 8999)}`,
+      'Code Client': 'ABN-3G-77105',
       'Nom Abonné': 'Salma Tazi',
       'Téléphone': '06 62 33 44 55',
-      'Adresse Client': 'Résidence Al Mansour, Sidi Bernoussi',
-      'Zone MSAN': 'SIDI BERNOUSSI',
+      'Adresse Client': `Avenue Mohammed V, ${z2}`,
+      'Zone MSAN': z2,
       'Date Enregistrement': '2026-10-14 08:45',
     },
     {
-      'N° Réclamation': 'REC-2026-9903',
-      'Code Client': 'ABN-CAS-77109',
+      'N° Réclamation': `REC-2026-${Math.floor(1000 + Math.random() * 8999)}`,
+      'Code Client': 'ABN-3G-77109',
       'Nom Abonné': 'Société Atlas Telecom',
       'Téléphone': '05 22 40 11 22',
-      'Adresse Client': '45 Bd Emile Zola, Roches Noires',
-      'Zone MSAN': 'ROCHES NOIRES',
+      'Adresse Client': `Bd Hassan II, ${z3}`,
+      'Zone MSAN': z3,
       'Date Enregistrement': '2026-10-14 09:00',
     },
     {
-      'N° Réclamation': 'REC-2026-9904', // Deuxième visite pour tester la réintervention
-      'Code Client': 'ABN-CAS-88219',
-      'Nom Abonné': 'Driss El Kettani (Réclamation réouverte)',
+      'N° Réclamation': `REC-2026-${Math.floor(1000 + Math.random() * 8999)}`,
+      'Code Client': 'ABN-3G-88219',
+      'Nom Abonné': 'Driss El Kettani (Deuxième visite)',
       'Téléphone': '06 61 45 88 12',
-      'Adresse Client': '42 Bd Chefchaouni, Aïn Sebaâ',
-      'Zone MSAN': 'Ain-Sebaa',
+      'Adresse Client': `Immeuble 4B, ${z1}`,
+      'Zone MSAN': z1,
       'Date Enregistrement': '2026-10-14 09:15',
     },
     {
-      'N° Réclamation': 'REC-2026-9905',
-      'Code Client': 'ABN-CAS-77120',
+      'N° Réclamation': `REC-2026-${Math.floor(1000 + Math.random() * 8999)}`,
+      'Code Client': 'ABN-3G-77120',
       'Nom Abonné': 'Mehdi Chraibi',
       'Téléphone': '06 64 77 88 99',
-      'Adresse Client': 'Quartier Al Yassir, Belvédère',
-      'Zone MSAN': 'BELVEDERE',
+      'Adresse Client': `Quartier Administratif, ${z2}`,
+      'Zone MSAN': z2,
       'Date Enregistrement': '2026-10-14 09:30',
     },
     {
-      // Ligne invalide volontaire pour tester le rapport des rejets (§3)
+      // Ligne invalide volontaire pour tester le rapport de rejet
       'N° Réclamation': '', // Ticket vide
       'Code Client': 'ABN-ERR-001',
-      'Nom Abonné': 'Ligne Corrompue Test',
+      'Nom Abonné': 'Ligne Sans Numéro Ticket',
       'Téléphone': '06 00 00 00 00',
-      'Adresse Client': 'Adresse inconnue',
-      'Zone MSAN': 'AIN SEBAA',
+      'Adresse Client': 'Adresse test',
+      'Zone MSAN': z1,
       'Date Enregistrement': '2026-10-14 09:35',
     },
     {
-      // Ligne avec zone technique inconnue pour tester la file "zone à rattacher" (§4)
-      'N° Réclamation': 'REC-2026-9906',
-      'Code Client': 'ABN-CAS-77133',
+      // Ligne avec zone non répertoriée pour tester la file "Zone à rattacher"
+      'N° Réclamation': `REC-2026-${Math.floor(1000 + Math.random() * 8999)}`,
+      'Code Client': 'ABN-3G-77133',
       'Nom Abonné': 'Younes Berrada',
       'Téléphone': '06 65 11 22 33',
-      'Adresse Client': 'Zone Portuaire Nord, Port de Casablanca',
-      'Zone MSAN': 'MSAN-PORT-INCONNU',
+      'Adresse Client': 'Nouvelle Extension Urbaine',
+      'Zone MSAN': 'MSAN-NOUVELLE-EXTENSION',
       'Date Enregistrement': '2026-10-14 09:40',
     },
   ];
 
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Tickets SAV 3GCOM');
+  XLSX.utils.book_append_sheet(wb, ws, `SAV_${selectedSector?.code || '3GCOM'}`);
   return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
 }

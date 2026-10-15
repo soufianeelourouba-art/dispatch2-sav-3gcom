@@ -120,6 +120,10 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'techniciens' && (
+              <TechniciensView currentUser={currentUser} />
+            )}
+
             {activeTab === 'files' && (
               <SpecialQueuesView
                 currentUser={currentUser}
@@ -141,7 +145,7 @@ export default function App() {
             )}
 
             {activeTab === 'techniciens' && (
-              <TechniciensView />
+              <TechniciensView currentUser={currentUser} />
             )}
 
             {activeTab === 'import' && (

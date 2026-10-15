@@ -21,6 +21,7 @@ import {
 interface TelegramLinkModalProps {
   technician: Technician | null;
   onClose: () => void;
+  onUpdate?: () => void;
 }
 
 export const TelegramLinkModal: React.FC<TelegramLinkModalProps> = ({ technician, onClose }) => {

@@ -36,6 +36,8 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
   onNavigateToImport,
   onNavigateToSuivi,
 }) => {
+  const userSectors = store.getSectors(currentUser);
+  const [selectedSectorId, setSelectedSectorId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewScope, setViewScope] = useState<'PENDING_DISPATCH' | 'ALREADY_SENT' | 'ALL'>('PENDING_DISPATCH');
   const [activeSlaFilter, setActiveSlaFilter] = useState<'ALL' | 'OVERDUE' | 'CRITICAL' | 'LITIGES'>('ALL');
@@ -52,8 +54,8 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
     return () => unsub();
   }, []);
 
-  const tickets = store.getTickets(currentUser);
-  const technicians = store.getTechnicians(currentUser).filter(t => t.isActive);
+  const tickets = store.getTickets(currentUser, selectedSectorId);
+  const technicians = store.getTechnicians(currentUser, selectedSectorId).filter(t => t.isActive);
 
   // Tickets eligible for dispatch (§5: PENDING, PROPOSED, TO_ASSIGN, ZONE_TO_MAP, REOPENED)
   const dispatchableTickets = useMemo(() => {
@@ -70,10 +72,13 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
   const criticalTickets = useMemo(() => tickets.filter(t => t.slaStatus === 'WARNING' && !t.isClosed), [tickets]);
   const litigeTickets = useMemo(() => tickets.filter(t => t.currentStatus === 'LITIGE'), [tickets]);
 
-  // Run dispatch engine on dispatchable tickets
+  // Run dispatch engine on dispatchable tickets for the selected sector scope
   const simulationResult = useMemo(() => {
-    return calculateDispatchProposals(dispatchableTickets, currentUser.sectorId);
-  }, [dispatchableTickets, currentUser.sectorId]);
+    return calculateDispatchProposals(
+      dispatchableTickets, 
+      selectedSectorId !== 'ALL' ? selectedSectorId : (currentUser.sectorIds?.[0] || currentUser.sectorId)
+    );
+  }, [dispatchableTickets, selectedSectorId, currentUser.sectorIds, currentUser.sectorId]);
 
   const proposalsMap = useMemo(() => {
     const map = new Map<string, { techId: string | null; techName: string | null; rationale: string; isSecondVisit: boolean }>();
@@ -216,10 +221,26 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
       {/* Top Banner & Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-              Secteur {currentUser.sectorId === 'sec-cas-nord' ? 'Casablanca Nord' : 'Rabat - Salé'}
-            </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {userSectors.length > 1 ? (
+              <div className="flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200">
+                <span className="text-[11px] font-bold text-emerald-800">Secteur actif :</span>
+                <select
+                  value={selectedSectorId}
+                  onChange={e => setSelectedSectorId(e.target.value)}
+                  className="bg-white border border-emerald-300 rounded-lg px-2 py-0.5 text-xs font-bold text-emerald-900 focus:outline-none"
+                >
+                  <option value="ALL">Tous mes secteurs ({userSectors.length})</option>
+                  {userSectors.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                Secteur {userSectors[0]?.name || 'Périmètre SAV'}
+              </span>
+            )}
             <span className="text-xs text-slate-400">·</span>
             <span className="text-xs text-slate-500 font-medium">Contrat SAV Maroc Telecom</span>
           </div>

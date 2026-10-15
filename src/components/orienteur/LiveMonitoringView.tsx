@@ -30,6 +30,8 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
   onOpenTicketHistory,
   onOpenSimulator,
 }) => {
+  const userSectors = store.getSectors(currentUser);
+  const [selectedSectorFilter, setSelectedSectorFilter] = useState<string>('ALL');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
   const [slaFilter, setSlaFilter] = useState<'ALL' | 'OVERDUE' | 'CRITICAL' | 'LITIGES' | 'ON_TIME'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,8 +46,8 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
     return () => unsub();
   }, []);
 
-  const tickets = store.getTickets(currentUser);
-  const technicians = store.getTechnicians(currentUser).filter(t => t.isActive);
+  const tickets = store.getTickets(currentUser, selectedSectorFilter);
+  const technicians = store.getTechnicians(currentUser, selectedSectorFilter).filter(t => t.isActive);
 
   // SLA Counter metrics (§2 & §5)
   const overdueTickets = useMemo(() => tickets.filter(t => t.slaStatus === 'EXPIRED' && !t.isClosed), [tickets]);
@@ -144,10 +146,26 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-              Secteur {currentUser.sectorId === 'sec-cas-nord' ? 'Casablanca Nord' : 'Rabat - Salé'}
-            </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {userSectors.length > 1 ? (
+              <div className="flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200">
+                <span className="text-[11px] font-bold text-emerald-800">Secteur actif :</span>
+                <select
+                  value={selectedSectorFilter}
+                  onChange={e => setSelectedSectorFilter(e.target.value)}
+                  className="bg-white border border-emerald-300 rounded-lg px-2 py-0.5 text-xs font-bold text-emerald-900 focus:outline-none"
+                >
+                  <option value="ALL">Tous mes secteurs ({userSectors.length})</option>
+                  {userSectors.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                Secteur {userSectors[0]?.name || 'Périmètre SAV'}
+              </span>
+            )}
             <span className="text-xs text-slate-400">·</span>
             <span className="text-xs text-slate-500 font-medium">Contrat SAV Maroc Telecom</span>
           </div>

@@ -56,7 +56,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
           // Auto activate
           store.updateTechnician(matchedTech.id, {
             telegramActivationStatus: 'ACTIVATED',
-            telegramActivationDate: new Date().toISOString(),
+            telegramActivatedAt: new Date().toISOString(),
           });
         }
       } else if (technicianId) {
@@ -322,7 +322,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({
                 >
                   {LITIGE_REASONS.map(r => (
                     <option key={r.code} value={r.code}>
-                      {r.label} ({r.category === 'TECHNIQUE' ? 'Cause Technique' : 'Cause Externe'})
+                      {r.label} ({r.category === 'TECHNICAL' ? 'Cause Technique' : 'Cause Externe'})
                     </option>
                   ))}
                 </select>

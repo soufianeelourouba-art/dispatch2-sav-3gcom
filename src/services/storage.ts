@@ -1,4 +1,5 @@
 import {
+  DC,
   Sector,
   TechnicalZone,
   ZoneAlias,
@@ -14,6 +15,7 @@ import {
   LITIGE_REASONS
 } from '../types';
 import {
+  INITIAL_DCS,
   INITIAL_USERS,
   INITIAL_SECTORS,
   INITIAL_TECHNICAL_ZONES,
@@ -26,15 +28,16 @@ import { db, testFirestoreConnection } from './firebase';
 import { collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 
 const STORAGE_KEYS = {
-  USERS: '3gcom_users_v2',
-  CURRENT_USER: '3gcom_current_user_v2',
-  SECTORS: '3gcom_sectors_v2',
-  ZONES: '3gcom_zones_v2',
-  ZONE_ALIASES: '3gcom_zone_aliases_v2',
-  TECHNICIANS: '3gcom_technicians_v2',
-  TICKETS: '3gcom_tickets_v2',
-  EVENTS: '3gcom_events_v2',
-  TELEGRAM_TOKEN: '3gcom_telegram_token_v2',
+  DCS: '3gcom_dcs_v3',
+  USERS: '3gcom_users_v3',
+  CURRENT_USER: '3gcom_current_user_v3',
+  SECTORS: '3gcom_sectors_v3',
+  ZONES: '3gcom_zones_v3',
+  ZONE_ALIASES: '3gcom_zone_aliases_v3',
+  TECHNICIANS: '3gcom_technicians_v3',
+  TICKETS: '3gcom_tickets_v3',
+  EVENTS: '3gcom_events_v3',
+  TELEGRAM_TOKEN: '3gcom_telegram_token_v3',
 };
 
 // --- SLA Invariant (24-Hour Strict SLA) ---
@@ -155,6 +158,7 @@ export function formatCasablancaTimeOnly(utcIsoString: string | undefined): stri
 }
 
 class AppStateStore {
+  private dcs: DC[] = [];
   private users: User[] = [];
   private currentUser: User | null = null;
   private sectors: Sector[] = [];
@@ -174,6 +178,9 @@ class AppStateStore {
 
   private loadInitialData() {
     try {
+      const storedDcs = localStorage.getItem(STORAGE_KEYS.DCS);
+      this.dcs = storedDcs ? JSON.parse(storedDcs) : INITIAL_DCS;
+
       const storedUsers = localStorage.getItem(STORAGE_KEYS.USERS);
       this.users = storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS;
 
@@ -198,12 +205,6 @@ class AppStateStore {
         telegramLinkDisabled: t.telegramLinkDisabled ?? false,
       }));
 
-      if (localStorage.getItem('3gcom_cleaned_tickets_prod_v2') !== 'true') {
-        localStorage.removeItem(STORAGE_KEYS.TICKETS);
-        localStorage.removeItem(STORAGE_KEYS.EVENTS);
-        localStorage.setItem('3gcom_cleaned_tickets_prod_v2', 'true');
-      }
-
       const storedTickets = localStorage.getItem(STORAGE_KEYS.TICKETS);
       let parsedTickets: Ticket[] = storedTickets ? JSON.parse(storedTickets) : [];
       
@@ -225,6 +226,7 @@ class AppStateStore {
       this.telegramToken = storedToken || '';
     } catch (e) {
       console.warn('LocalStorage reset to defaults', e);
+      this.dcs = INITIAL_DCS;
       this.users = INITIAL_USERS;
       this.currentUser = null;
       this.sectors = INITIAL_SECTORS;
@@ -341,6 +343,25 @@ class AppStateStore {
         console.warn('Firestore users sync notice:', err.message);
       });
 
+      // 4b. Listen for DCs in real time
+      onSnapshot(collection(db, 'dcs'), snapshot => {
+        if (!snapshot.empty) {
+          const remoteDcs: DC[] = [];
+          snapshot.forEach(docSnap => {
+            remoteDcs.push(docSnap.data() as DC);
+          });
+          if (remoteDcs.length > 0) {
+            this.dcs = remoteDcs;
+            localStorage.setItem(STORAGE_KEYS.DCS, JSON.stringify(this.dcs));
+            this.notify();
+          }
+        } else if (this.dcs.length > 0) {
+          this.dcs.forEach(d => this.syncDocToFirestore('dcs', d.id, d));
+        }
+      }, err => {
+        console.warn('Firestore dcs sync notice:', err.message);
+      });
+
       // 5. Listen for sectors in real time
       onSnapshot(collection(db, 'sectors'), snapshot => {
         if (!snapshot.empty) {
@@ -415,6 +436,7 @@ class AppStateStore {
 
   private persist() {
     try {
+      localStorage.setItem(STORAGE_KEYS.DCS, JSON.stringify(this.dcs));
       localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(this.users));
       if (this.currentUser) {
         localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(this.currentUser));
@@ -510,11 +532,42 @@ class AppStateStore {
     this.persist();
   }
 
-  // --- Strict Sector Partition Enforcement (§8.4) ---
-  public getTickets(requestingUser?: User | null): Ticket[] {
+  // --- Multi-Sector & DC Scoping Engine ---
+  public getAllowedSectorIds(user?: User | null): string[] {
+    const target = user !== undefined ? user : this.currentUser;
+    if (!target) return [];
+    if (target.role === 'MANAGER') {
+      return this.sectors.map(s => s.id);
+    }
+    const ids = new Set<string>();
+    if (target.sectorIds && Array.isArray(target.sectorIds)) {
+      target.sectorIds.forEach(id => ids.add(id));
+    }
+    if (target.sectorId) {
+      ids.add(target.sectorId);
+    }
+    // Secteurs affectés via dispatcherId ou dispatcherIds
+    this.sectors.forEach(s => {
+      if (s.dispatcherId === target.id || (s.dispatcherIds && s.dispatcherIds.includes(target.id))) {
+        ids.add(s.id);
+      }
+    });
+    return Array.from(ids);
+  }
+
+  public canUserManageTechnician(user: User | null, technician: Technician): boolean {
+    if (!user) return false;
+    if (user.role === 'MANAGER') return true;
+    if (user.role === 'DISPATCHER') {
+      const allowed = this.getAllowedSectorIds(user);
+      return allowed.includes(technician.sectorId);
+    }
+    return false;
+  }
+
+  // --- Strict Sector Partition Enforcement ---
+  public getTickets(requestingUser?: User | null, sectorIdFilter?: string): Ticket[] {
     const user = requestingUser !== undefined ? requestingUser : this.currentUser;
-    // Always refresh real-time SLA metrics
-    const now = Date.now();
     const enriched = this.tickets.map(t => {
       const sla = computeTicketSLA(t.registeredAt);
       return {
@@ -525,8 +578,13 @@ class AppStateStore {
       };
     });
 
+    if (sectorIdFilter && sectorIdFilter !== 'ALL') {
+      return enriched.filter(t => t.sectorId === sectorIdFilter);
+    }
+
     if (user && user.role === 'DISPATCHER') {
-      return enriched.filter(t => t.sectorId === user.sectorId);
+      const allowed = this.getAllowedSectorIds(user);
+      return enriched.filter(t => t.sectorId && allowed.includes(t.sectorId));
     }
     return enriched;
   }
@@ -548,18 +606,84 @@ class AppStateStore {
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
 
+  // --- DC Management ---
+  public getDCs(): DC[] {
+    return [...this.dcs];
+  }
+
+  public addDC(dc: Omit<DC, 'id' | 'createdAt'>): DC {
+    const newDc: DC = {
+      ...dc,
+      id: `dc-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    this.dcs.push(newDc);
+    this.persist();
+    this.syncDocToFirestore('dcs', newDc.id, newDc);
+    return newDc;
+  }
+
+  public updateDC(id: string, updates: Partial<DC>) {
+    const index = this.dcs.findIndex(d => d.id === id);
+    if (index >= 0) {
+      this.dcs[index] = { ...this.dcs[index], ...updates };
+      this.persist();
+      this.syncDocToFirestore('dcs', id, this.dcs[index]);
+    }
+  }
+
+  public deleteDC(id: string) {
+    this.dcs = this.dcs.filter(d => d.id !== id);
+    this.persist();
+    this.deleteDocFromFirestore('dcs', id);
+  }
+
+  // --- Sector Management ---
   public getSectors(requestingUser?: User | null): Sector[] {
     const user = requestingUser !== undefined ? requestingUser : this.currentUser;
-    if (user && user.role === 'DISPATCHER' && user.sectorId) {
-      return this.sectors.filter(s => s.id === user.sectorId);
+    if (user && user.role === 'DISPATCHER') {
+      const allowed = this.getAllowedSectorIds(user);
+      return this.sectors.filter(s => allowed.includes(s.id));
     }
     return [...this.sectors];
   }
 
-  public getTechnicalZones(requestingUser?: User | null): TechnicalZone[] {
+  public addSector(sector: Omit<Sector, 'id' | 'createdAt'>): Sector {
+    const newSector: Sector = {
+      ...sector,
+      id: `sec-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    this.sectors.push(newSector);
+    this.persist();
+    this.syncDocToFirestore('sectors', newSector.id, newSector);
+    return newSector;
+  }
+
+  public updateSector(id: string, updates: Partial<Sector>) {
+    const index = this.sectors.findIndex(s => s.id === id);
+    if (index >= 0) {
+      this.sectors[index] = { ...this.sectors[index], ...updates };
+      this.persist();
+      this.syncDocToFirestore('sectors', id, this.sectors[index]);
+    }
+  }
+
+  public deleteSector(id: string) {
+    this.sectors = this.sectors.filter(s => s.id !== id);
+    this.persist();
+    this.deleteDocFromFirestore('sectors', id);
+  }
+
+  // --- Technical Zones & Technicians Scoping ---
+  public getTechnicalZones(requestingUser?: User | null, sectorIdFilter?: string): TechnicalZone[] {
+    if (sectorIdFilter && sectorIdFilter !== 'ALL') {
+      return this.zones.filter(z => z.sectorId === sectorIdFilter);
+    }
     const user = requestingUser !== undefined ? requestingUser : this.currentUser;
-    if (user && user.role === 'DISPATCHER' && user.sectorId) {
-      return this.zones.filter(z => z.sectorId === user.sectorId);
+    if (user && user.role === 'DISPATCHER') {
+      const allowed = this.getAllowedSectorIds(user);
+      return this.zones.filter(z => allowed.includes(z.sectorId));
     }
     return [...this.zones];
   }
@@ -568,10 +692,14 @@ class AppStateStore {
     return [...this.zoneAliases];
   }
 
-  public getTechnicians(requestingUser?: User | null): Technician[] {
+  public getTechnicians(requestingUser?: User | null, sectorIdFilter?: string): Technician[] {
+    if (sectorIdFilter && sectorIdFilter !== 'ALL') {
+      return this.technicians.filter(t => t.sectorId === sectorIdFilter || (t.sectorIds && t.sectorIds.includes(sectorIdFilter)));
+    }
     const user = requestingUser !== undefined ? requestingUser : this.currentUser;
-    if (user && user.role === 'DISPATCHER' && user.sectorId) {
-      return this.technicians.filter(t => t.sectorId === user.sectorId);
+    if (user && user.role === 'DISPATCHER') {
+      const allowed = this.getAllowedSectorIds(user);
+      return this.technicians.filter(t => allowed.includes(t.sectorId) || (t.sectorIds && t.sectorIds.some(sid => allowed.includes(sid))));
     }
     return [...this.technicians];
   }
@@ -694,6 +822,53 @@ class AppStateStore {
     this.syncDocToFirestore('tickets', updatedTicket.id, updatedTicket);
     this.syncDocToFirestore('events', newEvent.id, newEvent);
     return newEvent;
+  }
+
+  // --- Technician Field Operations (NF & Litige) ---
+  public submitNF(params: {
+    ticketId: string;
+    technicianId: string;
+    technicianName: string;
+    nfType?: 'STANDARD' | 'CENTRAL_CONFIG';
+    ontSerialNumber?: string;
+    cableLengthMeters?: number;
+    notes?: string;
+  }) {
+    return this.addTicketEvent({
+      ticketId: params.ticketId,
+      eventType: 'NF_SUBMITTED',
+      actorRole: 'TECHNICIAN',
+      actorName: params.technicianName,
+      technicianId: params.technicianId,
+      technicianName: params.technicianName,
+      nfType: params.nfType || 'STANDARD',
+      ontSerialNumber: params.ontSerialNumber,
+      cableLengthMeters: params.cableLengthMeters,
+      notes: params.notes,
+    });
+  }
+
+  public reportLitige(params: {
+    ticketId: string;
+    technicianId: string;
+    technicianName: string;
+    reasonCode: LitigeReasonCode;
+    notes?: string;
+    rdvDateTime?: string;
+  }) {
+    const reasonDef = LITIGE_REASONS.find(r => r.code === params.reasonCode);
+    return this.addTicketEvent({
+      ticketId: params.ticketId,
+      eventType: 'LITIGE_REPORTED',
+      actorRole: 'TECHNICIAN',
+      actorName: params.technicianName,
+      technicianId: params.technicianId,
+      technicianName: params.technicianName,
+      litigeReasonCode: params.reasonCode,
+      litigeReasonLabel: reasonDef?.label || params.reasonCode,
+      rdvDateTime: params.rdvDateTime,
+      notes: params.notes,
+    });
   }
 
   // --- Dispatcher Operations on Litiges (§2) ---
