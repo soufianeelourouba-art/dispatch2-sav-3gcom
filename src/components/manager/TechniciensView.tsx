@@ -256,9 +256,9 @@ export const TechniciensView: React.FC<TechniciensViewProps> = ({ currentUser })
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                {isDispatcher ? 'Mes Techniciens Terrain (Intra-Secteur)' : 'Gestion des Techniciens & Affectations'}
-              </h1>
+              <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                {isDispatcher ? 'Équipe de mon secteur' : 'Équipe terrain'}
+              </h2>
               {isDispatcher ? (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />

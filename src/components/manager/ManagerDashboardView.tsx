@@ -1,833 +1,385 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { store } from '../../services/storage';
-import { formatCasablancaDateTime, formatCasablancaTimeOnly, formatSLADisplay } from '../../domain/format';
+import { formatCasablancaDateTime } from '../../domain/format';
 import { exportTicketsToExcel, exportTechnicianMatrixToExcel } from '../../services/excelExporter';
-import { Ticket, Technician, Sector, MANUAL_TICKET_NATURES } from '../../types';
+import { Ticket, MANUAL_TICKET_NATURES } from '../../types';
 import { SplitterIncidentsPanel } from '../tickets/SplitterIncidentsPanel';
 import { ManualTicketModal } from '../tickets/ManualTicketModal';
-import { 
-  BarChart3, 
-  TrendingUp, 
-  Users, 
-  MapPin, 
-  Download, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Clock, 
-  Building2, 
-  Calendar, 
-  Flame, 
-  ShieldCheck, 
-  Filter, 
-  Search, 
-  Globe, 
-  Bell, 
-  ChevronRight, 
-  Eye, 
-  ExternalLink,
-  ShieldAlert,
-  Phone,
-  Trash2,
-  Wrench,
-  Plus
+import {
+  AlertTriangle, CheckCircle2, Clock, Download, Eye, Flame, Inbox, Plus, Search, Trash2, Truck, Users, Wrench,
+  type LucideIcon,
 } from 'lucide-react';
 
 interface ManagerDashboardViewProps {
   onOpenTicketHistory?: (ticket: Ticket) => void;
 }
 
-export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({
-  onOpenTicketHistory,
-}) => {
-  const [selectedSectorFilter, setSelectedSectorFilter] = useState<string>('ALL');
-  const [activeAlertCategory, setActiveAlertCategory] = useState<'ALL' | 'OVERDUE' | 'CRITICAL' | 'LITIGES' | 'OVERLOAD'>('ALL');
-  const [alertSearchQuery, setAlertSearchQuery] = useState<string>('');
+type AlertKind = 'OVERDUE' | 'CRITICAL' | 'LITIGE' | 'TECH';
+
+// Status families used by the charts (same colors as the encours bar of the menu)
+const FAMILIES: { key: string; label: string; color: string; match: (t: Ticket) => boolean }[] = [
+  { key: 'todo', label: 'À affecter', color: 'bg-brand-orange-500', match: t => ['TO_ASSIGN', 'PROPOSED', 'ZONE_TO_MAP'].includes(t.currentStatus) },
+  { key: 'field', label: 'En cours terrain', color: 'bg-sky-400', match: t => ['ASSIGNED', 'REOPENED'].includes(t.currentStatus) },
+  { key: 'litige', label: 'Litiges', color: 'bg-rose-500', match: t => t.currentStatus === 'LITIGE' },
+  { key: 'suspended', label: 'Suspendus', color: 'bg-slate-400', match: t => t.currentStatus === 'SUSPENDED' },
+  { key: 'nf', label: 'NF', color: 'bg-emerald-500', match: t => t.currentStatus === 'COMPLETED' },
+];
+
+const pct = (part: number, total: number) => (total ? Math.round((part / total) * 100) : 0);
+
+export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({ onOpenTicketHistory }) => {
+  const [sectorFilter, setSectorFilter] = useState<string>('ALL');
+  const [alertKind, setAlertKind] = useState<AlertKind | 'ALL'>('ALL');
+  const [alertSearch, setAlertSearch] = useState('');
   const [isManualTicketOpen, setIsManualTicketOpen] = useState(false);
   const currentUser = store.getCurrentUser();
   const [, setStoreVersion] = useState(0);
 
-  // Subscribe directly to store for real-time reactivity
-  useEffect(() => {
-    const unsub = store.subscribe(() => setStoreVersion(v => v + 1));
-    return () => unsub();
-  }, []);
+  useEffect(() => store.subscribe(() => setStoreVersion(v => v + 1)), []);
 
   const allTickets = store.getTickets();
   const allSectors = store.getSectors();
   const allTechs = store.getTechnicians();
+  const selectedSector = allSectors.find(s => s.id === sectorFilter) || null;
+  const tickets = sectorFilter === 'ALL' ? allTickets : allTickets.filter(t => t.sectorId === sectorFilter);
+  const techs = (sectorFilter === 'ALL' ? allTechs : allTechs.filter(t => t.sectorId === sectorFilter || (t.sectorIds || []).includes(sectorFilter)))
+    .filter(t => t.isActive);
 
-  const selectedSector = useMemo(() => {
-    if (selectedSectorFilter === 'ALL') return null;
-    return allSectors.find(s => s.id === selectedSectorFilter) || null;
-  }, [allSectors, selectedSectorFilter]);
+  const total = tickets.length;
+  const overdue = tickets.filter(t => t.slaStatus === 'EXPIRED' && !t.isClosed);
+  const critical = tickets.filter(t => t.slaStatus === 'WARNING' && !t.isClosed);
+  const litiges = tickets.filter(t => t.currentStatus === 'LITIGE');
+  const inField = tickets.filter(t => ['ASSIGNED', 'REOPENED'].includes(t.currentStatus)).length;
+  const completed = tickets.filter(t => t.currentStatus === 'COMPLETED').length;
+  const slaRate = pct(total - overdue.length, total);
+  const manualTickets = tickets.filter(t => t.origin === 'MANUAL');
 
-  // Tickets filtered by active sector selection
-  const scopedTickets = useMemo(() => {
-    if (selectedSectorFilter === 'ALL') return allTickets;
-    return allTickets.filter(t => t.sectorId === selectedSectorFilter);
-  }, [allTickets, selectedSectorFilter]);
-
-  // Technicians filtered by active sector selection
-  const scopedTechs = useMemo(() => {
-    if (selectedSectorFilter === 'ALL') return allTechs;
-    return allTechs.filter(t => t.sectorId === selectedSectorFilter);
-  }, [allTechs, selectedSectorFilter]);
-
-  // Metrics per sector with strict 24h SLA compliance (§7)
-  const sectorMetrics = useMemo(() => {
-    return allSectors.map(sec => {
-      const secTickets = allTickets.filter(t => t.sectorId === sec.id);
-      const totalVolume = secTickets.length;
-      
-      const inProgress = secTickets.filter(t => ['ASSIGNED', 'REOPENED'].includes(t.currentStatus)).length;
-      const completed = secTickets.filter(t => t.currentStatus === 'COMPLETED').length;
-      const litiges = secTickets.filter(t => t.currentStatus === 'LITIGE').length;
-      
-      // SLA 24h metrics
-      const overdueSla = secTickets.filter(t => t.slaStatus === 'EXPIRED' && !t.isClosed).length;
-      const warningSla = secTickets.filter(t => t.slaStatus === 'WARNING' && !t.isClosed).length;
-
-      // Completion rate calculation (denominator is active volume §7 & §9)
-      const displayRate = totalVolume >= 10
-        ? `${Math.round((completed / (totalVolume || 1)) * 100)} %`
-        : totalVolume > 0
-        ? `${completed} sur ${totalVolume}`
-        : '0';
-
-      const slaComplianceRate = totalVolume >= 10
-        ? `${Math.round(((totalVolume - overdueSla) / (totalVolume || 1)) * 100)} %`
-        : totalVolume > 0
-        ? `${totalVolume - overdueSla} sur ${totalVolume}`
-        : 'N/A';
-
-      return {
-        sector: sec,
-        totalVolume,
-        inProgress,
-        completed,
-        litiges,
-        overdueSla,
-        warningSla,
-        displayRate,
-        slaComplianceRate,
-      };
-    });
-  }, [allSectors, allTickets]);
-
-  // Scoped KPIs depending on sector selection
-  const kpiTotal = scopedTickets.length;
-  const kpiCompleted = scopedTickets.filter(t => t.currentStatus === 'COMPLETED').length;
-  const kpiActive = scopedTickets.filter(t => ['ASSIGNED', 'REOPENED'].includes(t.currentStatus)).length;
-  const kpiLitiges = scopedTickets.filter(t => t.currentStatus === 'LITIGE').length;
-  const kpiOverdue = scopedTickets.filter(t => t.slaStatus === 'EXPIRED' && !t.isClosed).length;
-  const kpiWarning = scopedTickets.filter(t => t.slaStatus === 'WARNING' && !t.isClosed).length;
-
-  const kpiSlaComplianceRate = kpiTotal >= 5
-    ? `${Math.round(((kpiTotal - kpiOverdue) / (kpiTotal || 1)) * 100)} %`
-    : kpiTotal > 0
-    ? `${kpiTotal - kpiOverdue} sur ${kpiTotal}`
-    : '100 %';
-
-  // --- Operational Alerts Center (Kingdom or Scoped) ---
-  const overdueAlerts = useMemo(() => {
-    return scopedTickets.filter(t => t.slaStatus === 'EXPIRED' && !t.isClosed);
-  }, [scopedTickets]);
-
-  const criticalAlerts = useMemo(() => {
-    return scopedTickets.filter(t => t.slaStatus === 'WARNING' && !t.isClosed);
-  }, [scopedTickets]);
-
-  const litigeAlerts = useMemo(() => {
-    return scopedTickets.filter(t => t.currentStatus === 'LITIGE');
-  }, [scopedTickets]);
-
-  // Technicians overload or inactive
+  // Technicians overloaded (6+ open) or without progress for 1h30
   const now = Date.now();
-  const technicianAlerts = useMemo(() => {
-    const list: { tech: Technician; reason: string; activeCount: number; sectorName: string }[] = [];
-    scopedTechs.filter(t => t.isActive).forEach(tech => {
-      const activeTkts = scopedTickets.filter(t => t.currentAssignedTechId === tech.id && !t.isClosed);
-      const sec = allSectors.find(s => s.id === tech.sectorId);
+  const techAlerts = techs.flatMap(tech => {
+    const open = tickets.filter(t => t.currentAssignedTechId === tech.id && !t.isClosed);
+    if (open.length >= 6) return [{ tech, text: `${open.length} interventions ouvertes` }];
+    const stale = open.find(t => (now - new Date(t.lastEventAt || t.updatedAt).getTime()) / 3600000 >= 1.5);
+    return stale ? [{ tech, text: `Aucun avancement depuis plus d'1h30 (${stale.ticketNumber})` }] : [];
+  });
 
-      // Overload: >= 6 tickets
-      if (activeTkts.length >= 6) {
-        list.push({
-          tech,
-          reason: `Surcharge opérationnelle : ${activeTkts.length} interventions actives en cours`,
-          activeCount: activeTkts.length,
-          sectorName: sec?.name || 'Secteur',
-        });
-      }
+  const alertCounts: Record<AlertKind, number> = {
+    OVERDUE: overdue.length, CRITICAL: critical.length, LITIGE: litiges.length, TECH: techAlerts.length,
+  };
+  const alertTotal = Object.values(alertCounts).reduce((a, b) => a + b, 0);
+  const q = alertSearch.trim().toLowerCase();
+  const matches = (t: Ticket) => !q || [t.ticketNumber, t.clientName, t.rawZoneText].some(v => (v || '').toLowerCase().includes(q));
+  const ticketAlerts: { kind: AlertKind; ticket: Ticket }[] = [
+    ...overdue.sort((a, b) => a.slaRemainingHours - b.slaRemainingHours).map(ticket => ({ kind: 'OVERDUE' as const, ticket })),
+    ...critical.map(ticket => ({ kind: 'CRITICAL' as const, ticket })),
+    ...litiges.map(ticket => ({ kind: 'LITIGE' as const, ticket })),
+  ].filter(a => (alertKind === 'ALL' || alertKind === a.kind) && matches(a.ticket));
 
-      // Inactivity > 1.5h
-      const staleTkt = activeTkts.find(t => {
-        const refTime = t.lastEventAt ? new Date(t.lastEventAt).getTime() : new Date(t.updatedAt).getTime();
-        return (now - refTime) / (1000 * 3600) >= 1.5;
-      });
+  const sectorRows = allSectors.map(sector => {
+    const list = allTickets.filter(t => t.sectorId === sector.id);
+    const late = list.filter(t => t.slaStatus === 'EXPIRED' && !t.isClosed).length;
+    return { sector, list, late, rate: pct(list.length - late, list.length) };
+  });
 
-      if (staleTkt && activeTkts.length < 6) {
-        list.push({
-          tech,
-          reason: `Inactivité constatée : aucun avancement depuis > 1h30 (Ticket ${staleTkt.ticketNumber})`,
-          activeCount: activeTkts.length,
-          sectorName: sec?.name || 'Secteur',
-        });
-      }
-    });
-    return list;
-  }, [scopedTechs, scopedTickets, allSectors, now]);
+  const techRows = techs
+    .map(tech => {
+      const list = allTickets.filter(t => t.currentAssignedTechId === tech.id);
+      return {
+        tech,
+        received: list.length,
+        nf: list.filter(t => t.currentStatus === 'COMPLETED').length,
+        open: list.filter(t => !t.isClosed).length,
+        litiges: list.filter(t => t.currentStatus === 'LITIGE').length,
+      };
+    })
+    .sort((a, b) => b.nf - a.nf || b.received - a.received);
+  const maxReceived = Math.max(1, ...techRows.map(r => r.received));
 
-  const totalAlertCount = overdueAlerts.length + criticalAlerts.length + litigeAlerts.length + technicianAlerts.length;
-
-  const handleExportAll = () => {
-    const prefix = selectedSector ? `rapport_${selectedSector.code.toLowerCase()}` : 'rapport_royaume_3gcom';
-    exportTicketsToExcel(scopedTickets, `${prefix}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  const dateTag = new Date().toISOString().split('T')[0];
+  const exportAll = () => exportTicketsToExcel(tickets, `rapport_${selectedSector ? selectedSector.code.toLowerCase() : 'royaume'}_${dateTag}.xlsx`);
+  const exportManual = () => exportTicketsToExcel(manualTickets, `interventions_hors_ticket_${selectedSector ? selectedSector.code.toLowerCase() : 'royaume'}_${dateTag}.xlsx`);
+  const exportTechs = () => exportTechnicianMatrixToExcel(techs, tickets, `matrice_techniciens_${selectedSector ? selectedSector.code.toLowerCase() : 'national'}.xlsx`);
+  const purge = () => {
+    if (window.confirm(`⚠️ Supprimer TOUS les tickets (${allTickets.length}) ?\n\nLe référentiel (secteurs, zones, techniciens) est conservé.`)) store.clearAllTickets();
   };
 
-  // Interventions created in the app (no operator ticket): followed and billed separately
-  const manualTickets = useMemo(() => scopedTickets.filter(t => t.origin === 'MANUAL'), [scopedTickets]);
-
-  const handleExportManual = () => {
-    const prefix = selectedSector ? selectedSector.code.toLowerCase() : 'royaume';
-    exportTicketsToExcel(manualTickets, `interventions_hors_ticket_${prefix}_${new Date().toISOString().split('T')[0]}.xlsx`);
-  };
-
-  const handleExportTechs = () => {
-    exportTechnicianMatrixToExcel(scopedTechs, scopedTickets, `matrice_techniciens_${selectedSector ? selectedSector.code.toLowerCase() : 'national'}.xlsx`);
-  };
-
-  const handleClearAllTickets = () => {
-    if (window.confirm(`⚠️ Confirmer la suppression de TOUS les tickets (${allTickets.length} tickets actuellement en base) ?\n\nCette action remettra la base à zéro pour vous permettre d'importer vos propres fichiers réels. Le référentiel (secteurs, zones, techniciens) sera conservé.`)) {
-      store.clearAllTickets();
-    }
-  };
+  const techName = (id?: string) => allTechs.find(t => t.id === id)?.fullName;
+  const sectorName = (id?: string | null) => allSectors.find(s => s.id === id)?.name || '';
 
   return (
-    <div className="space-y-6">
-      
-      {/* Top Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-purple-800 bg-purple-50 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-purple-600" />
-              <span>Supervision Direction · {selectedSector ? selectedSector.name : 'Vue Royaume (Tous Secteurs)'}</span>
-            </span>
-            <span className="text-xs text-slate-400">·</span>
-            <span className="text-xs text-slate-500 font-medium">Contrat SAV Fibre Maroc Telecom</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
-            Tableau de Bord Direction & Centre d'Alertes SLA
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Indicateurs consolidés, filtrage par secteur, détection en temps réel des dépassements SLA HD et des litiges terrain.
-          </p>
+    <div className="space-y-5">
+      {/* Scope and actions */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex gap-1 p-1 bg-white rounded-xl border border-slate-200 overflow-x-auto self-start max-w-full">
+          {[{ id: 'ALL', name: 'Tous les secteurs', count: allTickets.length, late: 0 }, ...sectorRows.map(r => ({ id: r.sector.id, name: r.sector.name, count: r.list.length, late: r.late }))].map(s => (
+            <button
+              key={s.id}
+              onClick={() => setSectorFilter(s.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1.5 ${sectorFilter === s.id ? 'bg-brand-navy-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              {s.name}
+              <span className={sectorFilter === s.id ? 'text-white/60' : 'text-slate-400'}>{s.count}</span>
+              {s.late > 0 && <span className="px-1.5 rounded-full bg-rose-500 text-white text-[10px]">{s.late}</span>}
+            </button>
+          ))}
         </div>
-
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          <button
-            onClick={() => setIsManualTicketOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-violet-800 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 transition-colors shadow-xs cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Créer un ticket</span>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setIsManualTicketOpen(true)} className="px-3 py-2 text-xs font-bold text-violet-800 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 flex items-center gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Créer un ticket
           </button>
-
-          <button
-            onClick={handleClearAllTickets}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl hover:bg-rose-100 transition-colors shadow-xs cursor-pointer"
-            title="Vider tous les tickets pour repartir sur une base propre"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-            <span>Purger tickets ({allTickets.length})</span>
+          <button onClick={exportTechs} className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 flex items-center gap-1.5">
+            <Download className="w-3.5 h-3.5" /> Matrice techniciens
           </button>
-
-          <button
-            onClick={handleExportTechs}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors shadow-xs cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>Matrice Techniciens</span>
-          </button>
-          
-          <button
-            onClick={handleExportAll}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl transition-colors shadow-xs cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Excel (.xlsx)</span>
+          <button onClick={exportAll} className="px-3.5 py-2 text-xs font-bold text-white bg-brand-navy-900 hover:bg-brand-navy-800 rounded-xl flex items-center gap-1.5">
+            <Download className="w-3.5 h-3.5" /> Export Excel
           </button>
         </div>
       </div>
 
-      {/* Sector Filter Bar (§3: "dans le dashbord manager vue royaume je veux aussi avoir possiblite de filtrer par Secteur") */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter className="w-4 h-4 text-slate-500 shrink-0" />
-          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider shrink-0">
-            Filtrer par Secteur :
-          </span>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              onClick={() => setSelectedSectorFilter('ALL')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                selectedSectorFilter === 'ALL'
-                  ? 'bg-brand-navy-900 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              <Globe className="w-3.5 h-3.5" />
-              <span>Vue Royaume (Tous)</span>
-              <span className="ml-1 text-[11px] font-mono opacity-80">({allTickets.length})</span>
-            </button>
-
-            {allSectors.map(sec => {
-              const count = allTickets.filter(t => t.sectorId === sec.id).length;
-              const overdueCount = allTickets.filter(t => t.sectorId === sec.id && t.slaStatus === 'EXPIRED' && !t.isClosed).length;
-              const isSelected = selectedSectorFilter === sec.id;
-
-              return (
-                <button
-                  key={sec.id}
-                  onClick={() => setSelectedSectorFilter(sec.id)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    isSelected
-                      ? 'bg-purple-900 text-white shadow-xs font-bold'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5 opacity-70" />
-                  <span>{sec.name}</span>
-                  <span className="ml-1 text-[11px] font-mono opacity-80">({count})</span>
-                  {overdueCount > 0 && (
-                    <span className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center font-mono ${
-                      isSelected ? 'bg-rose-500 text-white' : 'bg-rose-100 text-rose-700'
-                    }`}>
-                      {overdueCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {selectedSector && (
-          <div className="text-xs text-slate-500 shrink-0 flex items-center gap-2">
-            <span>Orienteur responsable : <b>{store.getSectorOrienteurNames(selectedSector.id) || 'Non assigné'}</b></span>
-            <button
-              onClick={() => setSelectedSectorFilter('ALL')}
-              className="text-xs font-semibold text-purple-700 hover:underline"
-            >
-              Réinitialiser à Vue Royaume
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Dynamic High-level KPIs */}
+      {/* Key figures */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        {/* Total tickets */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500 block">Total Réclamations Reçues</span>
-          <span className="text-3xl font-bold text-slate-900 font-mono tabular-nums block mt-1">
-            {kpiTotal}
-          </span>
-          <span className="text-[11px] text-slate-400 block mt-1">
-            {selectedSector ? selectedSector.name : 'Ensemble des secteurs'}
-          </span>
-        </div>
-
-        {/* Retards HD */}
-        <div className={`p-5 rounded-2xl border shadow-xs transition-all ${
-          kpiOverdue > 0 
-            ? 'bg-rose-50/50 border-rose-300 ring-1 ring-rose-200' 
-            : 'bg-white border-slate-200/80'
-        }`}>
-          <span className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
-            <Flame className="w-4 h-4 text-rose-600" />
-            <span>Retards SLA HD (&gt; 24h)</span>
-          </span>
-          <span className="text-3xl font-bold text-rose-800 font-mono tabular-nums block mt-1">
-            {kpiOverdue}
-          </span>
-          <span className="text-[11px] text-rose-600 block mt-1 font-semibold">
-            Pénalités Maroc Telecom applicables
-          </span>
-        </div>
-
-        {/* En Cours Terrain */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <span className="text-xs font-semibold text-blue-700 block">En Cours Terrain</span>
-          <span className="text-3xl font-bold text-blue-800 font-mono tabular-nums block mt-1">
-            {kpiActive}
-          </span>
-          <span className="text-[11px] text-slate-500 block mt-1">Chez les techniciens ({scopedTechs.length} actifs)</span>
-        </div>
-
-        {/* Normalisés NF */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <span className="text-xs font-semibold text-emerald-700 block">Normalisés (NF)</span>
-          <span className="text-3xl font-bold text-emerald-800 font-mono tabular-nums block mt-1">
-            {kpiCompleted}
-          </span>
-          <span className="text-[11px] text-slate-500 block mt-1">Fibre rétablie avec succès</span>
-        </div>
-
-        {/* Litiges LC */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <span className="text-xs font-semibold text-amber-700 block">Litiges Clients (LC)</span>
-          <span className="text-3xl font-bold text-amber-800 font-mono tabular-nums block mt-1">
-            {kpiLitiges}
-          </span>
-          <span className="text-[11px] text-slate-500 block mt-1">Taux de respect SLA : <b>{kpiSlaComplianceRate}</b></span>
-        </div>
+        <StatTile icon={Inbox} tone="slate" label="Réclamations" value={total} caption={selectedSector ? selectedSector.name : 'tous secteurs'} />
+        <StatTile icon={Flame} tone="rose" label="Hors délai (> 24 h)" value={overdue.length} caption="pénalités applicables" highlight={overdue.length > 0} />
+        <StatTile icon={Truck} tone="sky" label="En cours terrain" value={inField} caption={`${techs.length} technicien(s) actif(s)`} />
+        <StatTile icon={CheckCircle2} tone="emerald" label="Normalisés (NF)" value={completed} caption={`${pct(completed, total)} % des réclamations`} />
+        <StatTile icon={AlertTriangle} tone="amber" label="Litiges" value={litiges.length} caption="à traiter par l'orienteur" />
       </div>
 
-      <SplitterIncidentsPanel tickets={scopedTickets} technicians={allTechs} sectors={allSectors} />
-
-      {/* Interventions hors ticket (à facturer) */}
-      <div className="bg-white rounded-2xl border border-violet-200 shadow-xs p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center shrink-0">
-            <Wrench className="w-4 h-4" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">Interventions hors ticket (à facturer) : {manualTickets.length}</h2>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-slate-600">
-              {MANUAL_TICKET_NATURES.map(n => (
-                <span key={n.code}>{n.label} : <b>{manualTickets.filter(t => t.manualNature === n.code).length}</b></span>
-              ))}
-              <span className="text-emerald-700">Clôturées (NF) : <b>{manualTickets.filter(t => t.currentStatus === 'COMPLETED').length}</b></span>
+      {/* SLA gauge + distribution */}
+      <div className="grid lg:grid-cols-3 gap-4">
+        <Card title="Respect du SLA 24 h">
+          <div className="flex items-center gap-5">
+            <Gauge value={slaRate} />
+            <div className="space-y-2 text-xs">
+              <Legend color="bg-rose-500" label="Hors délai" value={overdue.length} />
+              <Legend color="bg-amber-400" label="Moins de 6 h" value={critical.length} />
+              <Legend color="bg-emerald-500" label="Dans les temps" value={total - overdue.length - critical.length} />
             </div>
           </div>
-        </div>
-        <button
-          onClick={handleExportManual}
-          disabled={manualTickets.length === 0}
-          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-violet-800 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-40 transition-colors shrink-0"
+        </Card>
+
+        <Card title="Où en sont les réclamations" className="lg:col-span-2">
+          <StackedBar tickets={tickets} big />
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
+            {FAMILIES.map(f => <Legend key={f.key} color={f.color} label={f.label} value={tickets.filter(f.match).length} />)}
+          </div>
+          {sectorRows.length > 1 && (
+            <div className="mt-4 pt-4 border-t border-slate-100 space-y-2.5">
+              {sectorRows.map(r => (
+                <button
+                  key={r.sector.id}
+                  onClick={() => setSectorFilter(sectorFilter === r.sector.id ? 'ALL' : r.sector.id)}
+                  className={`w-full grid grid-cols-[110px_1fr_auto] items-center gap-3 text-xs rounded-lg px-1 py-0.5 ${sectorFilter === r.sector.id ? 'bg-slate-50' : 'hover:bg-slate-50'}`}
+                >
+                  <span className="text-left font-bold text-slate-800 truncate">{r.sector.name}</span>
+                  {r.list.length ? <StackedBar tickets={r.list} /> : <span className="text-left text-slate-400">Aucun ticket</span>}
+                  <span className="text-right text-slate-500 w-28">
+                    <b className="text-slate-900">{r.list.length}</b> · SLA <b className={r.rate < 80 ? 'text-rose-600' : 'text-emerald-600'}>{r.list.length ? `${r.rate} %` : '—'}</b>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Alerts + technicians */}
+      <div className="grid lg:grid-cols-5 gap-4">
+        <Card
+          className="lg:col-span-3"
+          title="Alertes"
+          aside={<span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${alertTotal ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>{alertTotal}</span>}
+          flush
         >
-          <Download className="w-3.5 h-3.5" />
-          <span>Exporter pour facturation</span>
+          <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
+            {([['ALL', 'Toutes', alertTotal], ['OVERDUE', 'Hors délai', alertCounts.OVERDUE], ['CRITICAL', '< 6 h', alertCounts.CRITICAL], ['LITIGE', 'Litiges', alertCounts.LITIGE], ['TECH', 'Techniciens', alertCounts.TECH]] as const).map(([id, label, n]) => (
+              <button
+                key={id}
+                onClick={() => setAlertKind(id)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${alertKind === id ? 'bg-brand-navy-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              >
+                {label} {n}
+              </button>
+            ))}
+            <div className="relative ml-auto w-full sm:w-44">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+              <input value={alertSearch} onChange={e => setAlertSearch(e.target.value)} placeholder="Ticket, client…" className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-2 py-1.5" />
+            </div>
+          </div>
+          <div className="max-h-[420px] overflow-y-auto divide-y divide-slate-100 border-t border-slate-100">
+            {alertTotal === 0 && (
+              <div className="p-8 text-center text-xs text-slate-500">
+                <CheckCircle2 className="w-7 h-7 text-emerald-500 mx-auto mb-2" /> Aucune alerte sur ce périmètre.
+              </div>
+            )}
+            {(alertKind === 'ALL' || alertKind === 'TECH') && techAlerts.map(({ tech, text }) => (
+              <div key={`tech-${tech.id}`} className="px-4 py-2.5 flex items-center gap-3 text-xs">
+                <AlertIcon kind="TECH" />
+                <div className="flex-1 min-w-0">
+                  <b className="text-slate-900">{tech.fullName}</b> <span className="text-slate-500">· {sectorName(tech.sectorId)}</span>
+                  <div className="text-violet-800">{text}</div>
+                </div>
+              </div>
+            ))}
+            {ticketAlerts.map(({ kind, ticket }) => (
+              <div key={`${kind}-${ticket.id}`} className="px-4 py-2.5 flex items-center gap-3 text-xs hover:bg-slate-50">
+                <AlertIcon kind={kind} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-2">
+                    <b className="font-mono text-slate-900">{ticket.ticketNumber}</b>
+                    <span className="text-slate-600 truncate">{ticket.clientName}</span>
+                    <span className="text-slate-400">· {ticket.rawZoneText}</span>
+                  </div>
+                  <div className="text-slate-500 truncate">
+                    {techName(ticket.currentAssignedTechId) ? <>👤 {techName(ticket.currentAssignedTechId)}</> : <span className="text-amber-700">Non affecté</span>}
+                    {kind === 'LITIGE' && <> · {ticket.lastLitigeReasonLabel}{ticket.lastLitigeRdvDate && ` · RDV ${formatCasablancaDateTime(ticket.lastLitigeRdvDate)}`}</>}
+                  </div>
+                </div>
+                {kind !== 'LITIGE' && (
+                  <span className={`px-2 py-0.5 rounded-full font-bold whitespace-nowrap ${kind === 'OVERDUE' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-800'}`}>
+                    {kind === 'OVERDUE' ? `+${Math.abs(ticket.slaRemainingHours)} h` : `reste ${ticket.slaRemainingHours} h`}
+                  </span>
+                )}
+                {onOpenTicketHistory && (
+                  <button onClick={() => onOpenTicketHistory(ticket)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100" title="Historique">
+                    <Eye className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="lg:col-span-2" title="Techniciens" aside={<span className="text-[11px] text-slate-400">NF / reçus</span>}>
+          {techRows.length === 0 ? (
+            <p className="text-xs text-slate-500">Aucun technicien actif.</p>
+          ) : (
+            <div className="space-y-3">
+              {techRows.map(r => (
+                <div key={r.tech.id} className="text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-900 truncate">{r.tech.fullName}</span>
+                    <span className="text-slate-500 whitespace-nowrap">
+                      <b className="text-emerald-700">{r.nf}</b> / {r.received}
+                      {r.open > 0 && <> · {r.open} ouvert{r.open > 1 ? 's' : ''}</>}
+                      {r.litiges > 0 && <span className="text-rose-600"> · {r.litiges} litige{r.litiges > 1 ? 's' : ''}</span>}
+                    </span>
+                  </div>
+                  <div className="h-2 mt-1.5 rounded-full bg-slate-100 overflow-hidden" style={{ width: `${Math.max(8, (r.received / maxReceived) * 100)}%` }}>
+                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct(r.nf, r.received)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <SplitterIncidentsPanel tickets={tickets} technicians={allTechs} sectors={allSectors} />
+
+      {/* Interventions without operator ticket */}
+      <Card title="Interventions hors ticket" aside={<span className="text-[11px] text-slate-400">à facturer</span>}>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center"><Wrench className="w-5 h-5" /></div>
+            <div className="text-2xl font-bold tabular-nums">{manualTickets.length}</div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+              {MANUAL_TICKET_NATURES.map(n => (
+                <span key={n.code}>{n.label} <b>{manualTickets.filter(t => t.manualNature === n.code).length}</b></span>
+              ))}
+              <span className="text-emerald-700">NF <b>{manualTickets.filter(t => t.currentStatus === 'COMPLETED').length}</b></span>
+            </div>
+          </div>
+          <button onClick={exportManual} disabled={manualTickets.length === 0} className="px-3 py-2 text-xs font-bold text-violet-800 bg-violet-50 border border-violet-200 rounded-xl hover:bg-violet-100 disabled:opacity-40 flex items-center gap-1.5 self-start">
+            <Download className="w-3.5 h-3.5" /> Exporter pour facturation
+          </button>
+        </div>
+      </Card>
+
+      <div className="flex justify-end">
+        <button onClick={purge} className="text-[11px] font-semibold text-slate-400 hover:text-rose-600 flex items-center gap-1" title="Vider tous les tickets pour repartir sur une base propre">
+          <Trash2 className="w-3.5 h-3.5" /> Purger les tickets ({allTickets.length})
         </button>
       </div>
 
-      {currentUser && (
-        <ManualTicketModal isOpen={isManualTicketOpen} currentUser={currentUser} onClose={() => setIsManualTicketOpen(false)} />
-      )}
-
-      {/* Operational Alerts Section (§3: "voir des alertes") */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
-        <div className="p-5 bg-brand-navy-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center">
-              <Bell className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold tracking-tight">
-                Centre d'Alertes Opérationnelles & Dépassements SLA
-              </h2>
-              <p className="text-xs text-slate-400">
-                {selectedSector ? `Alertes du secteur ${selectedSector.name}` : 'Surveillance globale Royaume'} · Détection proactive des risques de pénalité
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-rose-500 text-white">
-              {totalAlertCount} alerte(s) active(s)
-            </span>
-          </div>
-        </div>
-
-        {/* Alert Category Tabs */}
-        <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
-            <button
-              onClick={() => setActiveAlertCategory('ALL')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                activeAlertCategory === 'ALL' ? 'bg-brand-navy-900 text-white' : 'bg-white text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              Toutes ({totalAlertCount})
-            </button>
-            <button
-              onClick={() => setActiveAlertCategory('OVERDUE')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                activeAlertCategory === 'OVERDUE' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
-              }`}
-            >
-              <Flame className="w-3.5 h-3.5" />
-              <span>Retards HD &gt; 24h ({overdueAlerts.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveAlertCategory('CRITICAL')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                activeAlertCategory === 'CRITICAL' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>SLA Imminent &lt; 6h ({criticalAlerts.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveAlertCategory('LITIGES')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                activeAlertCategory === 'LITIGES' ? 'bg-sky-600 text-white' : 'bg-sky-50 text-sky-800 hover:bg-sky-100'
-              }`}
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span>Litiges Bloqués ({litigeAlerts.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveAlertCategory('OVERLOAD')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                activeAlertCategory === 'OVERLOAD' ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-800 hover:bg-purple-100'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Surcharge / Inactivité ({technicianAlerts.length})</span>
-            </button>
-          </div>
-
-          <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-            <input
-              type="text"
-              value={alertSearchQuery}
-              onChange={e => setAlertSearchQuery(e.target.value)}
-              placeholder="Chercher alerte..."
-              className="w-full text-xs bg-white border border-slate-200 rounded-lg pl-8 pr-2.5 py-1.5 text-slate-900 focus:outline-hidden focus:ring-1 focus:ring-slate-900"
-            />
-          </div>
-        </div>
-
-        {/* Alert Items List */}
-        <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
-          {totalAlertCount === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-500">
-              <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-              Aucune anomalie ni dépassement SLA détecté pour le périmètre sélectionné.
-            </div>
-          ) : (
-            <>
-              {/* Overdue HD alerts */}
-              {(activeAlertCategory === 'ALL' || activeAlertCategory === 'OVERDUE') &&
-                overdueAlerts.map(ticket => {
-                  const tech = allTechs.find(t => t.id === ticket.currentAssignedTechId);
-                  const sec = allSectors.find(s => s.id === ticket.sectorId);
-
-                  return (
-                    <div key={`overdue-${ticket.id}`} className="p-4 bg-rose-50/40 hover:bg-rose-50/80 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 mt-0.5">
-                          <Flame className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-xs text-slate-900">{ticket.ticketNumber}</span>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 bg-rose-100 px-2 py-0.5 rounded-full">
-                              Retard HD (+{Math.abs(ticket.slaRemainingHours)}h)
-                            </span>
-                            <span className="text-xs text-slate-500">· Secteur : <b>{sec?.name}</b></span>
-                          </div>
-                          <div className="text-xs text-slate-700 font-medium mt-0.5">
-                            Client : {ticket.clientName} (📞 {ticket.clientPhone}) · Zone : {ticket.rawZoneText}
-                          </div>
-                          <div className="text-[11px] text-rose-700 mt-0.5">
-                            Technicien affecté : <b>{tech?.fullName || 'Non assigné'}</b> · Dépassé depuis {Math.abs(ticket.slaRemainingHours)} heures par rapport aux 24h contractuelles Maroc Telecom.
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {onOpenTicketHistory && (
-                          <button
-                            onClick={() => onOpenTicketHistory(ticket)}
-                            className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Historique</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-
-              {/* Critical SLA alerts */}
-              {(activeAlertCategory === 'ALL' || activeAlertCategory === 'CRITICAL') &&
-                criticalAlerts.map(ticket => {
-                  const tech = allTechs.find(t => t.id === ticket.currentAssignedTechId);
-                  const sec = allSectors.find(s => s.id === ticket.sectorId);
-
-                  return (
-                    <div key={`crit-${ticket.id}`} className="p-4 bg-amber-50/30 hover:bg-amber-50/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
-                          <Clock className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-xs text-slate-900">{ticket.ticketNumber}</span>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
-                              SLA Imminent (reste {ticket.slaRemainingHours}h)
-                            </span>
-                            <span className="text-xs text-slate-500">· Secteur : <b>{sec?.name}</b></span>
-                          </div>
-                          <div className="text-xs text-slate-700 font-medium mt-0.5">
-                            Client : {ticket.clientName} (📞 {ticket.clientPhone}) · Zone : {ticket.rawZoneText}
-                          </div>
-                          <div className="text-[11px] text-amber-800 mt-0.5">
-                            Technicien : <b>{tech?.fullName || 'Non assigné'}</b> · À clore avant la fin de journée.
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {onOpenTicketHistory && (
-                          <button
-                            onClick={() => onOpenTicketHistory(ticket)}
-                            className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Historique</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-
-              {/* Litige alerts */}
-              {(activeAlertCategory === 'ALL' || activeAlertCategory === 'LITIGES') &&
-                litigeAlerts.map(ticket => {
-                  const tech = allTechs.find(t => t.id === ticket.currentAssignedTechId);
-                  const sec = allSectors.find(s => s.id === ticket.sectorId);
-
-                  return (
-                    <div key={`lit-${ticket.id}`} className="p-4 bg-sky-50/30 hover:bg-sky-50/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-sky-100 text-sky-800 flex items-center justify-center shrink-0 mt-0.5">
-                          <AlertTriangle className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-xs text-slate-900">{ticket.ticketNumber}</span>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-sky-800 bg-sky-100 px-2 py-0.5 rounded-full">
-                              Litige : {ticket.lastLitigeReasonLabel || 'Signalé terrain'}
-                            </span>
-                            <span className="text-xs text-slate-500">· Secteur : <b>{sec?.name}</b></span>
-                          </div>
-                          <div className="text-xs text-slate-700 font-medium mt-0.5">
-                            Client : {ticket.clientName} (📞 {ticket.clientPhone}) · Dernier passage : {tech?.fullName || 'Technicien'}
-                          </div>
-                          <div className="text-[11px] text-sky-800 mt-0.5">
-                            {ticket.lastLitigeRdvDate ? `RDV programmé le : ${formatCasablancaDateTime(ticket.lastLitigeRdvDate)}` : 'En attente de recontact client ou validation orienteur.'}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {onOpenTicketHistory && (
-                          <button
-                            onClick={() => onOpenTicketHistory(ticket)}
-                            className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1 shadow-2xs"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Historique</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-
-              {/* Technician Overload / Inactivity alerts */}
-              {(activeAlertCategory === 'ALL' || activeAlertCategory === 'OVERLOAD') &&
-                technicianAlerts.map((alert, idx) => (
-                  <div key={`tech-alert-${idx}`} className="p-4 bg-purple-50/30 hover:bg-purple-50/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-800 flex items-center justify-center shrink-0 mt-0.5">
-                        <Users className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-xs text-slate-900">{alert.tech.fullName}</span>
-                          <span className="text-[10px] font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-full">
-                            {alert.activeCount} tickets actifs
-                          </span>
-                          <span className="text-xs text-slate-500">· Secteur : <b>{alert.sectorName}</b></span>
-                        </div>
-                        <div className="text-xs text-slate-700 font-medium mt-0.5">
-                          📞 {alert.tech.phone} · Chat Telegram : <span className="font-mono">{alert.tech.telegramChatId || 'Non configuré'}</span>
-                        </div>
-                        <div className="text-[11px] text-purple-800 mt-0.5">
-                          {alert.reason}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Sector Comparison Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
-        <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-slate-600" />
-            <span>Comparatif d'Activité & Respect du SLA 24h par Secteur</span>
-          </h2>
-          <span className="text-xs text-slate-500 font-medium">
-            {allSectors.length} secteurs actifs
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-              <tr>
-                <th className="py-3 px-4">Secteur</th>
-                <th className="py-3 px-4">Orienteur</th>
-                <th className="py-3 px-4 text-center">Volume Reçu</th>
-                <th className="py-3 px-4 text-center">Retards &gt; 24h</th>
-                <th className="py-3 px-4 text-center">En Cours</th>
-                <th className="py-3 px-4 text-center">Normalisés (NF)</th>
-                <th className="py-3 px-4 text-center">Litiges (LC)</th>
-                <th className="py-3 px-4 text-right">Respect SLA 24h</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {sectorMetrics.map(item => {
-                const isSelected = selectedSectorFilter === item.sector.id;
-
-                return (
-                  <tr 
-                    key={item.sector.id} 
-                    onClick={() => setSelectedSectorFilter(isSelected ? 'ALL' : item.sector.id)}
-                    className={`cursor-pointer transition-colors ${
-                      isSelected ? 'bg-purple-50/80 font-medium' : 'hover:bg-slate-50/70'
-                    }`}
-                  >
-                    <td className="py-3 px-4 font-bold text-slate-900">
-                      <div className="flex items-center gap-1.5">
-                        {isSelected && <span className="w-2 h-2 rounded-full bg-purple-600"></span>}
-                        <span>{item.sector.name}</span>
-                      </div>
-                      <span className="text-[10px] text-slate-400 block font-mono">
-                        {item.sector.code}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-medium text-slate-800">
-                      {store.getSectorOrienteurNames(item.sector.id) || <span className="text-amber-700">Non assigné</span>}
-                    </td>
-                    <td className="py-3 px-4 text-center font-mono font-bold text-slate-900">
-                      {item.totalVolume}
-                    </td>
-                    <td className="py-3 px-4 text-center font-mono font-bold text-rose-700 bg-rose-50/50">
-                      {item.overdueSla > 0 ? `⚠️ ${item.overdueSla}` : '0'}
-                    </td>
-                    <td className="py-3 px-4 text-center font-mono text-blue-700 font-medium">
-                      {item.inProgress}
-                    </td>
-                    <td className="py-3 px-4 text-center font-mono text-emerald-700 font-bold">
-                      {item.completed}
-                    </td>
-                    <td className="py-3 px-4 text-center font-mono text-amber-700 font-semibold">
-                      {item.litiges}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
-                      {item.slaComplianceRate}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Technicians Performance Matrix Preview */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
-        <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <div>
-            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <Users className="w-4 h-4 text-slate-600" />
-              <span>Productivité des Techniciens Terrain {selectedSector ? `(${selectedSector.name})` : '(Vue Consolidée)'}</span>
-            </h2>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Suivi individuel des réalisations NF et des litiges signalés
-            </p>
-          </div>
-          <button
-            onClick={handleExportTechs}
-            className="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export complet (.xlsx)</span>
-          </button>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-              <tr>
-                <th className="py-3 px-4">Technicien</th>
-                <th className="py-3 px-4">Secteur</th>
-                <th className="py-3 px-4">Téléphone GSM</th>
-                <th className="py-3 px-4 text-center">Interventions Reçues</th>
-                <th className="py-3 px-4 text-center">NF Réalisés</th>
-                <th className="py-3 px-4 text-center">Litiges Signalés</th>
-                <th className="py-3 px-4 text-right">Taux de Clôture NF</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {scopedTechs.filter(t => t.isActive).map(tech => {
-                const techTickets = allTickets.filter(t => t.currentAssignedTechId === tech.id);
-                const completed = techTickets.filter(t => t.currentStatus === 'COMPLETED').length;
-                const litiges = techTickets.filter(t => t.currentStatus === 'LITIGE').length;
-                const total = techTickets.length;
-                const sec = allSectors.find(s => s.id === tech.sectorId);
-
-                const rate = total >= 10 
-                  ? `${Math.round((completed / total) * 100)} %` 
-                  : total > 0 
-                  ? `${completed} sur ${total}` 
-                  : 'N/A';
-
-                return (
-                  <tr key={tech.id} className="hover:bg-slate-50/50">
-                    <td className="py-3 px-4 font-bold text-slate-900">
-                      {tech.fullName}
-                    </td>
-                    <td className="py-3 px-4 text-slate-600">
-                      {sec?.name || 'Non rattaché'}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-slate-500">
-                      {tech.phone}
-                    </td>
-                    <td className="py-3 px-4 text-center font-mono font-bold text-slate-900">
-                      {total}
-                    </td>
-                    <td className="py-3 px-4 text-center font-mono text-emerald-700 font-bold">
-                      {completed}
-                    </td>
-                    <td className="py-3 px-4 text-center font-mono text-amber-700 font-semibold">
-                      {litiges}
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
-                      {rate}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
+      {currentUser && <ManualTicketModal isOpen={isManualTicketOpen} currentUser={currentUser} onClose={() => setIsManualTicketOpen(false)} />}
     </div>
   );
+};
+
+const TONES = {
+  slate: 'bg-slate-100 text-slate-600',
+  rose: 'bg-rose-100 text-rose-600',
+  sky: 'bg-sky-100 text-sky-600',
+  emerald: 'bg-emerald-100 text-emerald-600',
+  amber: 'bg-amber-100 text-amber-600',
+};
+
+const StatTile: React.FC<{ icon: LucideIcon; tone: keyof typeof TONES; label: string; value: number; caption: string; highlight?: boolean }> =
+  ({ icon: Icon, tone, label, value, caption, highlight }) => (
+    <div className={`bg-white rounded-2xl border p-4 ${highlight ? 'border-rose-300 ring-1 ring-rose-200' : 'border-slate-200/80'}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-slate-500">{label}</span>
+        <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${TONES[tone]}`}><Icon className="w-4 h-4" /></span>
+      </div>
+      <div className={`text-3xl font-bold tabular-nums mt-1 ${highlight ? 'text-rose-600' : 'text-slate-900'}`}>{value}</div>
+      <div className="text-[11px] text-slate-500 mt-0.5">{caption}</div>
+    </div>
+  );
+
+const Card: React.FC<{ title: string; aside?: React.ReactNode; className?: string; flush?: boolean; children: React.ReactNode }> =
+  ({ title, aside, className = '', flush, children }) => (
+    <section className={`bg-white rounded-2xl border border-slate-200/80 ${flush ? '' : 'p-4 pb-5'} ${className}`}>
+      <div className={`flex items-center justify-between ${flush ? 'px-4 pt-4 pb-3' : 'mb-4'}`}>
+        <h2 className="text-sm font-bold text-slate-900">{title}</h2>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+
+const Legend: React.FC<{ color: string; label: string; value: number }> = ({ color, label, value }) => (
+  <span className="flex items-center gap-1.5 text-xs text-slate-600">
+    <span className={`w-2.5 h-2.5 rounded-full ${color}`} />
+    {label} <b className="text-slate-900 tabular-nums">{value}</b>
+  </span>
+);
+
+const StackedBar: React.FC<{ tickets: Ticket[]; big?: boolean }> = ({ tickets, big }) => (
+  <div className={`flex w-full rounded-full overflow-hidden bg-slate-100 ${big ? 'h-4' : 'h-2.5'}`}>
+    {FAMILIES.map(f => {
+      const n = tickets.filter(f.match).length;
+      return n ? <div key={f.key} className={f.color} style={{ width: `${(n / tickets.length) * 100}%` }} title={`${f.label} : ${n}`} /> : null;
+    })}
+  </div>
+);
+
+// Half-ring gauge of the SLA compliance rate
+const Gauge: React.FC<{ value: number }> = ({ value }) => {
+  const r = 52;
+  const c = Math.PI * r;
+  const color = value >= 90 ? '#10b981' : value >= 70 ? '#f59e0b' : '#f43f5e';
+  return (
+    <div className="relative w-36 h-20 shrink-0">
+      <svg viewBox="0 0 120 66" className="w-full h-full">
+        <path d="M 8 60 A 52 52 0 0 1 112 60" fill="none" stroke="#e2e8f0" strokeWidth="12" strokeLinecap="round" />
+        <path d="M 8 60 A 52 52 0 0 1 112 60" fill="none" stroke={color} strokeWidth="12" strokeLinecap="round"
+          strokeDasharray={`${(value / 100) * c} ${c}`} />
+      </svg>
+      <div className="absolute inset-x-0 bottom-0 text-center">
+        <div className="text-2xl font-bold tabular-nums leading-none" style={{ color }}>{value} %</div>
+      </div>
+    </div>
+  );
+};
+
+const AlertIcon: React.FC<{ kind: AlertKind }> = ({ kind }) => {
+  const map = {
+    OVERDUE: [Flame, 'bg-rose-100 text-rose-600'],
+    CRITICAL: [Clock, 'bg-amber-100 text-amber-700'],
+    LITIGE: [AlertTriangle, 'bg-sky-100 text-sky-700'],
+    TECH: [Users, 'bg-violet-100 text-violet-700'],
+  } as const;
+  const [Icon, cls] = map[kind];
+  return <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${cls}`}><Icon className="w-3.5 h-3.5" /></span>;
 };

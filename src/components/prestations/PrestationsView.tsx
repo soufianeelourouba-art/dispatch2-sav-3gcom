@@ -75,9 +75,9 @@ export const PrestationsView: React.FC<PrestationsViewProps> = ({ currentUser, o
       {/* Header */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-brand-orange-500" /> Prestations
-          </h1>
+          <h2 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-brand-orange-500" /> Paiement des techniciens
+          </h2>
           <p className="text-[11px] text-slate-500 mt-0.5">
             Ce que chaque technicien a réalisé sur la période (date de la NF) : base du paiement.
           </p>

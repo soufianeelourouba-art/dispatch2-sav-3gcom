@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Ticket, User, Technician } from '../../types';
 import { store } from '../../services/storage';
-import { formatCasablancaDateTime } from '../../domain/format';
+import { StatusPill } from '../tickets/StatusPill';
 import { 
   AlertTriangle, 
   MapPin, 
@@ -52,26 +52,20 @@ export const SpecialQueuesView: React.FC<SpecialQueuesViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       
-      {/* Page Title */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-          Files Spéciales d'Intervention & Traitement d'Exception
-        </h1>
-        <p className="text-xs text-slate-500 mt-1">
-          Surveillance des dossiers critiques : Deuxièmes visites en souffrance, zones MSAN inconnues et réclamations sans affectation.
-        </p>
-      </div>
+      <p className="text-xs text-slate-500">
+        Dossiers à surveiller : deuxièmes visites, tickets sans affectation automatique et zones inconnues des fichiers Excel.
+      </p>
 
       {/* Queue selector tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3 text-xs font-semibold">
+      <div className="flex gap-1 p-1 bg-white rounded-xl border border-slate-200 overflow-x-auto self-start w-fit max-w-full text-xs font-bold">
         <button
           onClick={() => setActiveQueue('SECOND_VISIT')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+          className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-2 ${
             activeQueue === 'SECOND_VISIT'
-              ? 'bg-amber-600 text-white shadow-xs'
-              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+              ? 'bg-brand-navy-900 text-white'
+              : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Repeat className="w-3.5 h-3.5" />
@@ -80,10 +74,10 @@ export const SpecialQueuesView: React.FC<SpecialQueuesViewProps> = ({
 
         <button
           onClick={() => setActiveQueue('TO_ASSIGN')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+          className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-2 ${
             activeQueue === 'TO_ASSIGN'
-              ? 'bg-brand-navy-900 text-white shadow-xs'
-              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+              ? 'bg-brand-navy-900 text-white'
+              : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <UserCheck className="w-3.5 h-3.5" />
@@ -92,10 +86,10 @@ export const SpecialQueuesView: React.FC<SpecialQueuesViewProps> = ({
 
         <button
           onClick={() => setActiveQueue('UNMAPPED_ZONE')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
+          className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors flex items-center gap-2 ${
             activeQueue === 'UNMAPPED_ZONE'
-              ? 'bg-rose-700 text-white shadow-xs'
-              : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+              ? 'bg-brand-navy-900 text-white'
+              : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <FileQuestion className="w-3.5 h-3.5" />
@@ -157,8 +151,8 @@ export const SpecialQueuesView: React.FC<SpecialQueuesViewProps> = ({
                       <td className="py-3 px-4 font-medium text-slate-900">
                         {technicians.find(tc => tc.id === t.currentAssignedTechId)?.fullName || 'En attente d\'affectation'}
                       </td>
-                      <td className="py-3 px-4 font-semibold text-slate-800">
-                        {t.currentStatus}
+                      <td className="py-3 px-4">
+                        <StatusPill status={t.currentStatus} />
                       </td>
                       <td className="py-3 px-4 text-right">
                         <button

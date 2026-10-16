@@ -33,7 +33,7 @@ async function tempAccount(role: 'MANAGER' | 'DISPATCHER') {
 
 const SCREENS = {
   MANAGER: [
-    ['manager-dashboard', 'Vue Royaume'],
+    ['manager-dashboard', 'Tableau de bord'],
     ['referentiel', 'Référentiel'],
     ['techniciens', 'Techniciens'],
     ['import', 'Import Excel'],
@@ -50,6 +50,14 @@ const SCREENS = {
 } as const;
 
 const errors: string[] = [];
+
+// Menu entry: sidebar on desktop, drawer ("Ouvrir le menu") on mobile
+async function goTo(page: Page, label: string) {
+  const menu = page.getByRole('button', { name: 'Ouvrir le menu' });
+  if (await menu.isVisible()) await menu.click();
+  await page.getByRole('navigation', { name: 'Navigation principale' }).filter({ visible: true })
+    .getByRole('button', { name: label, exact: true }).click();
+}
 
 async function login(page: Page, email: string, password: string) {
   await page.goto(baseUrl);
@@ -85,20 +93,20 @@ try {
       page.on('console', msg => { if (msg.type() === 'error') errors.push(`${role}/${device} console: ${msg.text()}`); });
       await login(page, accounts[role].email, accounts[role].password);
       for (const [id, label] of SCREENS[role]) {
-        await page.getByRole('navigation').filter({ visible: true }).getByRole('button', { name: label, exact: true }).click();
+        await goTo(page, label);
         await page.waitForTimeout(800);
         await page.screenshot({ path: join(outDir, `${role === 'MANAGER' ? '1' : '2'}-${id}-${device}.png`), fullPage: device === 'desktop' });
       }
       // "Créer un ticket" dialog, opened then closed without submitting
       if (role === 'DISPATCHER') {
-        await page.getByRole('navigation').filter({ visible: true }).getByRole('button', { name: 'Dispatch du jour', exact: true }).click();
+        await goTo(page, 'Dispatch du jour');
         await page.getByRole('button', { name: 'Créer un ticket' }).click();
         await page.waitForTimeout(500);
         await page.screenshot({ path: join(outDir, `3-creer-ticket-${device}.png`) });
         await page.getByRole('button', { name: 'Annuler' }).click();
 
         // Import preview of the sample file (never confirmed)
-        await page.getByRole('navigation').filter({ visible: true }).getByRole('button', { name: 'Importer Excel', exact: true }).click();
+        await goTo(page, 'Importer Excel');
         await page.getByRole('button', { name: /Charger un fichier type/ }).click();
         await page.waitForTimeout(800);
         await page.screenshot({ path: join(outDir, `3-import-apercu-${device}.png`), fullPage: device === 'desktop' });

@@ -440,10 +440,10 @@ export const ReferentielView: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                <Network className="w-6 h-6 text-emerald-600" />
-                <span>Architecture Hiérarchique & Référentiel</span>
-              </h1>
+              <h2 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                <Network className="w-5 h-5 text-emerald-600" />
+                <span>Organisation</span>
+              </h2>
             </div>
             <p className="text-xs text-slate-500">
               Organisation contractuelle : <b>DC</b> ➔ <b>Secteurs</b> (1 orienteur affecté, multi-secteurs possible) ➔ <b>Zones d'intervention</b> (affectation multi-techniciens).

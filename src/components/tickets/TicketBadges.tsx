@@ -17,7 +17,7 @@ export const SplitterBadge: React.FC<{ ticket: Ticket; groupSize?: number }> = (
       title={collective ? 'Incident collectif : un seul technicien, une seule intervention' : 'Splitter du client'}
     >
       <Cable className="w-3 h-3" />
-      <span>Splitter {ticket.splitterRef}{collective ? ` · ${groupSize} tickets` : ''}</span>
+      <span>Splitter {ticket.splitterRef.replace(/^splitter\s+/i, '')}{collective ? ` · ${groupSize} tickets` : ''}</span>
     </span>
   );
 };

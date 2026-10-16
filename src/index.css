@@ -10,6 +10,15 @@
   --color-brand-orange-500: #e8892b;
   --color-brand-orange-400: #f2a14f;
   --color-brand-orange-50: #fff5eb;
+  --color-surface: #f3f5f9;
+  /* Figures and references use the main font with aligned digits (lighter than a code font) */
+  --font-mono: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+@utility font-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 @layer base {

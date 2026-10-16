@@ -225,8 +225,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
               Secteur {userSectors[0]?.name || ''}
             </span>
           )}
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight mt-1">Dispatch du jour</h1>
-          <p className="text-[11px] text-slate-500">📅 Reçus ou traités aujourd'hui + tout ce qui reste à traiter des jours précédents.</p>
+          <p className="text-[11px] text-slate-500 mt-1.5">📅 Reçus ou traités aujourd'hui + tout ce qui reste à traiter des jours précédents.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button

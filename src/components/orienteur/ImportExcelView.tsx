@@ -138,10 +138,10 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <FileSpreadsheet className="w-6 h-6 text-emerald-600" />
-              <span>Chargement des Tickets SAV par Secteur</span>
-            </h1>
+            <h2 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+              <span>Charger le fichier d'un secteur</span>
+            </h2>
             <p className="text-xs text-slate-500 mt-1">
               Chaque fichier est dédié à un <b>Secteur</b>. La colonne <b>Zone</b> sera lue pour dispatcher automatiquement aux techniciens de ces zones.
             </p>

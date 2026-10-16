@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Ticket } from './types';
 import { store, AuthStatus } from './services/storage';
-import { Navbar } from './components/Navbar';
-import { SumCheckBanner } from './components/SumCheckBanner';
+import { AppShell } from './components/layout/AppShell';
 import { DispatchView } from './components/orienteur/DispatchView';
 import { LiveMonitoringView } from './components/orienteur/LiveMonitoringView';
 import { ImportExcelView } from './components/orienteur/ImportExcelView';
@@ -81,23 +80,14 @@ export default function App() {
   const sumCheck = store.computeSumCheck(currentUser, currentUser.role === 'DISPATCHER');
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col text-slate-900 font-sans antialiased">
-      
-      {/* Top Bar Contract Navigation (§2) */}
-      <Navbar
-        currentUser={currentUser}
-        activeTab={activeTab}
-        onTabChange={tab => setActiveTab(tab)}
-        onToggleSimulator={() => setIsSimulatorOpen(!isSimulatorOpen)}
-        isSimulatorOpen={isSimulatorOpen}
-        onLogout={handleLogout}
-      />
+    <AppShell
+      currentUser={currentUser}
+      sumCheck={sumCheck}
+      activeTab={activeTab}
+      onTabChange={tab => setActiveTab(tab)}
+      onLogout={handleLogout}
+    >
 
-      {/* Systematic Sum Check Invariant Banner (§8.3) */}
-      <SumCheckBanner sumCheck={sumCheck} />
-
-      {/* Main Content Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         
         {/* Orienteur Scoped Views */}
         {currentUser.role === 'DISPATCHER' && (
@@ -171,20 +161,6 @@ export default function App() {
           </>
         )}
 
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 py-4 px-4 sm:px-6 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>
-            3GCOM · Plateforme de Dispatch SAV Fibre Optique Maroc Telecom
-          </span>
-          <span className="font-mono text-[11px] text-slate-400">
-            Traçabilité inaltérable (Append-Only Event Store) · Fuseau Africa/Casablanca
-          </span>
-        </div>
-      </footer>
-
       {/* Telegram Smartphone Interactive Simulator Drawer (§6 & §10) */}
       <TelegramSimulatorDrawer
         isOpen={isSimulatorOpen}
@@ -197,6 +173,6 @@ export default function App() {
         onClose={() => setInspectedTicket(null)}
       />
 
-    </div>
+    </AppShell>
   );
 }
