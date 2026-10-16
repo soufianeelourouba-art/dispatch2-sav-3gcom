@@ -581,6 +581,10 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                     <div className="text-[11px] text-rose-800 bg-rose-50 p-2 rounded-lg font-medium">
                       ⚠️ Litige : <b>{ticket.lastLitigeReasonLabel}</b>
                       {ticket.lastLitigeRdvDate && ` · RDV prévu : ${formatCasablancaDateTime(ticket.lastLitigeRdvDate)}`}
+                      {ticket.lastLitigeNeedsContact && (
+                        <span className="ml-2 font-bold text-blue-800 bg-blue-100 px-1.5 py-0.5 rounded">📞 Nouveau numéro demandé</span>
+                      )}
+                      {ticket.lastLitigeNotes && <div className="mt-0.5 italic">« {ticket.lastLitigeNotes} »</div>}
                     </div>
                   )}
                 </div>

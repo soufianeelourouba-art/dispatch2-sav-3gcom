@@ -173,6 +173,8 @@ export interface TicketEvent {
   litigeReasonCode?: LitigeReasonCode;
   litigeReasonLabel?: string;
   rdvDateTime?: string;
+  // Client unreachable: the technician asks the orienteur for another number
+  requestNewContact?: boolean;
   failureCategory?: 'EXTERNAL' | 'TECHNICAL';
   failureReasonCode?: string;
   failureReasonLabel?: string;
@@ -222,6 +224,8 @@ export interface Ticket {
   lastLitigeReasonCode?: LitigeReasonCode;
   lastLitigeReasonLabel?: string;
   lastLitigeRdvDate?: string;
+  lastLitigeNotes?: string; // technician's comment on the last litige
+  lastLitigeNeedsContact?: boolean; // waiting for a new client number from the orienteur
   lastFailureCategory?: 'EXTERNAL' | 'TECHNICAL';
   lastFailureReasonLabel?: string;
   lastVisitedTechName?: string;

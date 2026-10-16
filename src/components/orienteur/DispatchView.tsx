@@ -678,6 +678,12 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
                               RDV : {formatCasablancaDateTime(ticket.lastLitigeRdvDate)}
                             </span>
                           )}
+                          {ticket.lastLitigeNeedsContact && (
+                            <span className="ml-2 text-[11px] font-bold text-blue-800 bg-blue-100 px-1.5 py-0.5 rounded">
+                              📞 Nouveau numéro demandé
+                            </span>
+                          )}
+                          {ticket.lastLitigeNotes && <div className="mt-1 text-rose-800 italic">« {ticket.lastLitigeNotes} »</div>}
                         </div>
                         <button
                           onClick={() => setLitigeModalTicket(ticket)}

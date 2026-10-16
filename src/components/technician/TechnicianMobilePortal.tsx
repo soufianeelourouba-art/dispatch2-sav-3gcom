@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { LITIGE_REASONS, LitigeReasonCode, MANUAL_TICKET_NATURES } from '../../types';
+import { MANUAL_TICKET_NATURES } from '../../types';
 import { describeMaterials, prestationLabel, PRESTATIONS, type PrestationDeclaration } from '../../domain/prestations';
 import { formatCasablancaDateTime } from '../../domain/format';
+import { formatPhoneIntl, formatPhonesIntl } from '../../domain/litiges';
 import { ReportForm, type FormTicket } from './ReportForm';
-import { CheckCircle2, AlertTriangle, MapPin, Phone, Send, AlertCircle, ClipboardList, FileCheck2, Wrench, ArrowLeft } from 'lucide-react';
+import { LitigeForm } from './LitigeForm';
+import { CheckCircle2, AlertTriangle, MapPin, Phone, AlertCircle, ClipboardList, FileCheck2, Wrench } from 'lucide-react';
 
 // Technician app: no account, the secret activation token (?act=…) is the credential.
 // Opened from a link or inside Telegram as a Mini App ("Mon espace" menu, "Déclarer" buttons).
@@ -16,6 +18,8 @@ interface PortalTicket extends FormTicket {
   origin?: 'IMPORT' | 'MANUAL';
   manualNature?: string;
   description?: string;
+  reopenedWithNewPhone?: string;
+  lastDispatcherUpdateNotes?: string;
   closedAt?: string;
   prestation?: Omit<PrestationDeclaration, 'photoIds'> & { photoCount: number };
 }
@@ -324,6 +328,13 @@ const TicketList: React.FC<{
               )}
             </div>
           </div>
+          {t.currentStatus === 'REOPENED' && (t.reopenedWithNewPhone || t.lastDispatcherUpdateNotes) && (
+            <div className="text-sm bg-sky-50 border border-sky-200 text-sky-950 rounded-xl px-3 py-2 space-y-0.5">
+              <div className="font-bold">🔄 Relance de l'orienteur</div>
+              {t.reopenedWithNewPhone && <div>📞 Nouveau numéro : <b>{formatPhonesIntl(t.reopenedWithNewPhone)}</b></div>}
+              {t.lastDispatcherUpdateNotes && <div>📝 {t.lastDispatcherUpdateNotes}</div>}
+            </div>
+          )}
           {t.description && <div className="text-sm text-violet-900 bg-violet-50 rounded-lg px-2.5 py-1.5">📝 {t.description}</div>}
           <div className="space-y-1 text-sm">
             <div className="font-bold text-slate-900">{t.clientName}</div>
@@ -331,11 +342,12 @@ const TicketList: React.FC<{
               <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
               <span>{t.clientAddress} <span className="font-semibold">({t.rawZoneText})</span></span>
             </div>
-            {t.clientPhone && (
-              <a href={`tel:${t.clientPhone.split('/')[0].trim()}`} className="flex items-center gap-1.5 text-brand-navy-700 font-bold font-mono">
-                <Phone className="w-4 h-4" /> {t.clientPhone}
+            {/* Each number is a tap-to-call link (international format) */}
+            {t.clientPhone && t.clientPhone.split(/[\/,;]/).map(p => p.trim()).filter(Boolean).map(phone => (
+              <a key={phone} href={`tel:${formatPhoneIntl(phone).replace(/\s/g, '')}`} className="flex items-center gap-1.5 text-brand-navy-700 font-bold font-mono py-0.5">
+                <Phone className="w-4 h-4" /> {formatPhoneIntl(phone)}
               </a>
-            )}
+            ))}
           </div>
           {actions(t)}
         </div>
@@ -392,99 +404,5 @@ const DeclaredList: React.FC<{ tickets: PortalTicket[] }> = ({ tickets }) => {
         </div>
       ))}
     </div>
-  );
-};
-
-// Litige (unchanged behaviour; RDV and recontact improvements come in the next step)
-const LitigeForm: React.FC<{
-  token: string;
-  ticket: PortalTicket;
-  groupSize: number;
-  onDone: (message: string) => void;
-  onCancel: () => void;
-}> = ({ token, ticket, groupSize, onDone, onCancel }) => {
-  const [reason, setReason] = useState<LitigeReasonCode>('CLIENT_UNREACHABLE');
-  const [notes, setNotes] = useState('');
-  const [rdvDateTime, setRdvDateTime] = useState('');
-  const [applyToSplitter, setApplyToSplitter] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const wholeSplitter = groupSize > 1 && applyToSplitter;
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/portal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          action: 'REPORT',
-          ticketId: ticket.id,
-          scope: wholeSplitter ? 'SPLITTER' : 'TICKET',
-          report: { kind: 'LITIGE', reasonCode: reason, rdvDateTime: reason === 'RDV' ? rdvDateTime : undefined, notes: notes.trim() },
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) return setError(data.error || 'Envoi impossible, réessayez.');
-      onDone(wholeSplitter
-        ? `Litige signalé pour les ${groupSize} tickets du splitter ${ticket.splitterRef}. L'orienteur est alerté.`
-        : `Litige signalé pour le ticket ${ticket.ticketNumber}. L'orienteur est alerté.`);
-    } catch {
-      setError('Pas de connexion Internet. Réessayez dans un instant.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <form onSubmit={submit} className="space-y-3">
-      <button type="button" onClick={onCancel} className="flex items-center gap-1.5 text-sm font-semibold text-slate-600">
-        <ArrowLeft className="w-4 h-4" /> Retour
-      </button>
-      <div className="bg-rose-600 text-white rounded-2xl p-4">
-        <div className="text-[11px] uppercase tracking-wider text-white/70 font-bold">Signaler un litige</div>
-        <div className="font-mono font-bold text-lg">{ticket.ticketNumber}</div>
-        <div className="text-sm text-white/85">{ticket.clientName}</div>
-      </div>
-      {groupSize > 1 && (
-        <label className="flex items-start gap-2.5 p-3 rounded-xl bg-brand-orange-50 border border-brand-orange-400 text-sm cursor-pointer">
-          <input type="checkbox" checked={applyToSplitter} onChange={e => setApplyToSplitter(e.target.checked)} className="mt-1" />
-          <span><b>Appliquer aux {groupSize} tickets du splitter {ticket.splitterRef}</b></span>
-        </label>
-      )}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Motif</div>
-        <div className="grid gap-2">
-          {LITIGE_REASONS.map(r => (
-            <button
-              key={r.code}
-              type="button"
-              onClick={() => setReason(r.code)}
-              className={`min-h-12 px-3 rounded-xl border-2 text-sm font-bold text-left ${reason === r.code ? 'border-rose-600 bg-rose-600 text-white' : 'border-slate-200 bg-white text-slate-800'}`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-        {reason === 'RDV' && (
-          <input type="datetime-local" required value={rdvDateTime} onChange={e => setRdvDateTime(e.target.value)} className="w-full h-12 px-3 border border-slate-300 rounded-xl" />
-        )}
-        <textarea
-          rows={3}
-          required
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          placeholder="Détails (ex : client injoignable après 3 appels)"
-          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm"
-        />
-      </div>
-      {error && <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-3 text-sm font-semibold">{error}</div>}
-      <button type="submit" disabled={isSubmitting} className="w-full h-14 rounded-2xl bg-rose-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-        <Send className="w-5 h-5" /> {isSubmitting ? 'Envoi…' : 'Envoyer le litige'}
-      </button>
-    </form>
   );
 };

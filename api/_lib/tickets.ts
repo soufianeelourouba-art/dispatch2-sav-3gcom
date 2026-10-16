@@ -2,7 +2,7 @@
 // and the dispatch notifications.
 import { randomBytes } from 'node:crypto';
 import { adminDb } from './admin.js';
-import { applyEventToTicket, formatTicketMessage, formatSplitterGroupMessage } from '../../src/domain/tickets.js';
+import { applyEventToTicket, formatTicketMessage, formatSplitterGroupMessage, formatRelanceMessage } from '../../src/domain/tickets.js';
 import { splitterKey } from '../../src/domain/splitter.js';
 import { LITIGE_REASONS } from '../../src/types/index.js';
 import type { LitigeReasonCode, Technician, Ticket, TicketEvent } from '../../src/types/index.js';
@@ -39,7 +39,7 @@ export async function openTicketsOf(techId: string): Promise<Ticket[]> {
 
 export type TechnicianReport =
   | { kind: 'NF'; nfType: 'STANDARD' | 'CENTRAL_CONFIG'; ontSerialNumber?: string; cableLengthMeters?: number; notes?: string }
-  | { kind: 'LITIGE'; reasonCode: LitigeReasonCode; rdvDateTime?: string; notes?: string };
+  | { kind: 'LITIGE'; reasonCode: LitigeReasonCode; rdvDateTime?: string; notes?: string; requestNewContact?: boolean };
 
 // Appends the technician's NF / litige event and updates the ticket atomically.
 // Only the technician currently assigned to an open ticket may report on it.
@@ -89,6 +89,7 @@ export async function recordTechnicianReport(
           litigeReasonLabel: LITIGE_REASONS.find(r => r.code === report.reasonCode)?.label || report.reasonCode,
           rdvDateTime: report.rdvDateTime,
           notes: report.notes,
+          requestNewContact: report.requestNewContact || undefined,
         };
 
     const updated: Ticket = {
@@ -193,7 +194,9 @@ export async function sendWorkOrdersTo(tech: Technician, tickets: Ticket[], reco
       }
     } else {
       handled.add(ticket.id);
-      const sent = await sendMessage(tech.telegramChatId, formatTicketMessage(ticket), workOrderButtons(ticket.id));
+      // A litige sent back by the orienteur gets the short "relance" message
+      const text = ticket.currentStatus === 'REOPENED' ? formatRelanceMessage(ticket) : formatTicketMessage(ticket);
+      const sent = await sendMessage(tech.telegramChatId, text, workOrderButtons(ticket.id));
       await trackMessage([ticket.id], tech.telegramChatId, sent, 'orders');
       if (recordFor.has(ticket.id)) {
         await recordTelegramSent(tech, ticket, `Ordre de travail transmis sur le Telegram de ${tech.fullName}.`);

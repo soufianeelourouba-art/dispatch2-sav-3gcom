@@ -2,6 +2,7 @@
 // No Firebase or browser imports here.
 import type { ManualTicketNature, SLAStatus, SumCheckResult, Ticket, TicketEvent, TicketStatus } from '../types';
 import { MANUAL_TICKET_NATURES } from '../types/index.js';
+import { formatPhonesIntl } from './litiges.js';
 
 // --- SLA Invariant (24-Hour Strict SLA) ---
 export function computeTicketSLA(registeredAt: string): {
@@ -97,8 +98,15 @@ export function applyEventToTicket(ticket: Ticket, newEvent: TicketEvent, allTic
     updatedTicket.lastLitigeReasonCode = newEvent.litigeReasonCode;
     updatedTicket.lastLitigeReasonLabel = newEvent.litigeReasonLabel;
     updatedTicket.lastLitigeRdvDate = newEvent.rdvDateTime;
+    updatedTicket.lastLitigeNotes = newEvent.notes;
+    updatedTicket.lastLitigeNeedsContact = !!newEvent.requestNewContact;
     updatedTicket.lastVisitedTechName = newEvent.technicianName;
     updatedTicket.lastVisitedAt = newEvent.createdAt;
+  }
+
+  // The orienteur has handled the litige: no pending number request anymore
+  if (newEvent.eventType === 'LITIGE_REOPENED' || newEvent.eventType === 'LITIGE_VALIDATED') {
+    updatedTicket.lastLitigeNeedsContact = false;
   }
 
   if (newEvent.newClientPhone) {
@@ -147,7 +155,7 @@ export function formatTicketMessage(ticket: Ticket): string {
     manualBanner +
     `📋 <b>Ticket :</b> ${escapeHtml(ticket.ticketNumber)}\n` +
     `👤 <b>Abonné :</b> ${escapeHtml(ticket.clientName)}${hasClientRef(ticket.clientNumber) ? ` (Réf : ${escapeHtml(ticket.clientNumber)})` : ''}\n` +
-    `📞 <b>Téléphone :</b> ${escapeHtml(ticket.clientPhone)}\n` +
+    `📞 <b>Téléphone :</b> ${escapeHtml(formatPhonesIntl(ticket.clientPhone))}\n` +
     `📍 <b>Adresse :</b> ${escapeHtml(ticket.clientAddress)}\n` +
     `🏢 <b>Zone MSAN :</b> ${escapeHtml(ticket.rawZoneText)}` +
     (ticket.splitterRef ? `\n🔌 <b>Splitter :</b> ${escapeHtml(ticket.splitterRef)}` : '') +
@@ -158,6 +166,22 @@ export function formatTicketMessage(ticket: Ticket): string {
   );
 }
 
+// Short message when the orienteur sends a litige back to the technician: what changed first
+// (new number, instructions), then the essentials. Phone numbers are tappable in Telegram.
+export function formatRelanceMessage(ticket: Ticket): string {
+  return (
+    `🔄 <b>RELANCE — Ticket ${escapeHtml(ticket.ticketNumber)}</b>\n` +
+    (ticket.reopenedWithNewPhone
+      ? `📞 <b>Nouveau numéro : ${escapeHtml(formatPhonesIntl(ticket.reopenedWithNewPhone))}</b>\n`
+      : `📞 ${escapeHtml(formatPhonesIntl(ticket.clientPhone))}\n`) +
+    (ticket.lastDispatcherUpdateNotes ? `📝 <b>Orienteur :</b> ${escapeHtml(ticket.lastDispatcherUpdateNotes)}\n` : '') +
+    `👤 ${escapeHtml(ticket.clientName)}\n` +
+    `📍 ${escapeHtml(ticket.clientAddress)} · ${escapeHtml(ticket.rawZoneText)}` +
+    (ticket.splitterRef ? `\n🔌 Splitter ${escapeHtml(ticket.splitterRef)}` : '') +
+    (ticket.lastLitigeReasonLabel ? `\n<i>Litige précédent : ${escapeHtml(ticket.lastLitigeReasonLabel)}</i>` : '')
+  );
+}
+
 export function manualNatureLabel(nature?: ManualTicketNature): string {
   return MANUAL_TICKET_NATURES.find(n => n.code === nature)?.label || 'Intervention hors ticket';
 }
@@ -165,7 +189,7 @@ export function manualNatureLabel(nature?: ManualTicketNature): string {
 // One work order for every ticket of a splitter incident: a single repair closes them all.
 export function formatSplitterGroupMessage(splitterRef: string, tickets: Ticket[]): string {
   const lines = tickets.map((t, i) =>
-    `${i + 1}. <b>${escapeHtml(t.ticketNumber)}</b> — ${escapeHtml(t.clientName)} · 📞 ${escapeHtml(t.clientPhone)}\n` +
+    `${i + 1}. <b>${escapeHtml(t.ticketNumber)}</b> — ${escapeHtml(t.clientName)} · 📞 ${escapeHtml(formatPhonesIntl(t.clientPhone))}\n` +
     `    📍 ${escapeHtml(t.clientAddress)}`
   );
   return (

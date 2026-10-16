@@ -55,6 +55,16 @@ await page.waitForTimeout(400);
 await shot('3-erreurs');
 
 await page.getByRole('button', { name: 'Retour' }).click();
+await page.getByRole('button', { name: 'Litige', exact: true }).first().click();
+await page.getByRole('button', { name: 'Rendez-vous convenu (RDV)' }).click();
+await page.getByRole('button', { name: /^Demain/ }).click();
+await page.getByRole('button', { name: '14h', exact: true }).click();
+await page.getByText('Heure', { exact: true }).scrollIntoViewIfNeeded();
+await shot('6-litige-rdv');
+await page.getByRole('button', { name: 'Client injoignable' }).click();
+await page.evaluate(() => window.scrollTo(0, 0));
+await shot('7-litige-injoignable');
+await page.getByRole('button', { name: 'Retour' }).click();
 await page.getByRole('button', { name: /À déclarer/ }).click();
 await shot('4-a-declarer');
 await page.getByRole('button', { name: /Déclarées/ }).click();

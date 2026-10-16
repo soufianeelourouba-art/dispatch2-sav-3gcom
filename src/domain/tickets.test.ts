@@ -5,6 +5,7 @@ import {
   applyEventToTicket,
   computeSumCheck,
   formatTicketMessage,
+  formatRelanceMessage,
 } from './tickets';
 import type { Ticket, TicketEvent, EventType, TicketStatus } from '../types';
 
@@ -127,6 +128,14 @@ describe('applyEventToTicket', () => {
     });
   });
 
+  it('client injoignable : la demande de nouveau numéro est levée par la relance de l\'orienteur', () => {
+    const lit = event('LITIGE_REPORTED', { litigeReasonCode: 'CLIENT_UNREACHABLE', requestNewContact: true, notes: '3 appels sans réponse' });
+    const enLitige = applyEventToTicket(ticket(), lit, [lit]);
+    expect(enLitige).toMatchObject({ lastLitigeNeedsContact: true, lastLitigeNotes: '3 appels sans réponse' });
+    const reopen = event('LITIGE_REOPENED', { newClientPhone: '0611111111', dispatcherUpdateNotes: 'Nouveau numéro' });
+    expect(applyEventToTicket(enLitige, reopen, [lit, reopen]).lastLitigeNeedsContact).toBe(false);
+  });
+
   it('réouverture : applique le nouveau téléphone et la note de l\'orienteur', () => {
     const reopen = event('LITIGE_REOPENED', { newClientPhone: '0611111111', dispatcherUpdateNotes: 'Client joignable après 17h' });
     const updated = applyEventToTicket(ticket({ currentStatus: 'LITIGE' }), reopen, [reopen]);
@@ -170,8 +179,24 @@ describe('formatTicketMessage', () => {
     const text = formatTicketMessage(ticket({ clientName: 'Karim', clientPhone: '0661223344', clientAddress: 'Bd Anfa' }));
     expect(text).toContain('REC-1');
     expect(text).toContain('Karim');
-    expect(text).toContain('0661223344');
+    expect(text).toContain('+212 661 22 33 44');
     expect(text).toContain('Bd Anfa');
+  });
+
+  it('numéros au format international (cliquables dans Telegram)', () => {
+    expect(formatTicketMessage(ticket({ clientPhone: '212522525236/212666274849' }))).toContain('+212 522 52 52 36 / +212 666 27 48 49');
+  });
+
+  it('relance : nouveau numéro et consigne de l\'orienteur en premier', () => {
+    const text = formatRelanceMessage(ticket({
+      currentStatus: 'REOPENED',
+      reopenedWithNewPhone: '0661223344',
+      lastDispatcherUpdateNotes: 'Client joignable après 17h',
+      lastLitigeReasonLabel: 'Client injoignable',
+    }));
+    expect(text.indexOf('Nouveau numéro : +212 661 22 33 44')).toBeLessThan(text.indexOf('Client joignable après 17h'));
+    expect(text).toContain('RELANCE — Ticket REC-1');
+    expect(text).toContain('Litige précédent : Client injoignable');
   });
 
   it('neutralise le HTML venant des données importées', () => {

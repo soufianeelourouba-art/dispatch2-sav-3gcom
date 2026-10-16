@@ -22,15 +22,51 @@ import { technicianPrestations } from './_lib/prestations.js';
 import { afterTechnicianReport } from './_lib/afterReport.js';
 import { appBaseUrl, configNfButton, declareButton, setTechnicianMenu, technicianAppUrl, webAppButton } from './_lib/miniapp.js';
 import { LITIGE_REASONS } from '../src/types/index.js';
+import { RDV_SLOTS, dayLabel, parseRdvText, rdvDayOptions, rdvToIso } from '../src/domain/litiges.js';
+import { formatCasablancaDateTime } from '../src/domain/format.js';
 import type { Technician } from '../src/types/index.js';
 
-// Litige reasons that need a written detail from the technician before being recorded.
-const NEEDS_DETAIL: Record<string, string> = {
-  RDV: '📅 Indiquez la <b>date et l\'heure du RDV</b> convenu avec le client (ex : 18/10 à 14h30) :',
-  AUTRE: '✍️ Décrivez brièvement le <b>motif du litige</b> :',
+// Questions asked when a litige needs typed information (the answer comes as a message).
+// RDV_DATE: date + time typed ("autre date"); RDV_TIME: time typed for a chosen day.
+type SessionStep = 'RDV_DATE' | 'RDV_TIME' | 'DETAIL';
+interface LitigeSession {
+  ticketId: string;
+  reasonCode: 'RDV' | 'AUTRE';
+  group?: boolean;
+  step?: SessionStep; // absent in sessions created by older versions
+  day?: string; // RDV_TIME: chosen day code
+}
+const QUESTIONS: Record<SessionStep, string> = {
+  RDV_DATE: '📅 Indiquez la <b>date et l\'heure du RDV</b> (ex : <code>18/10 14h30</code>) :',
+  RDV_TIME: '🕐 Indiquez l\'<b>heure du RDV</b> (ex : <code>15h30</code>) :',
+  DETAIL: '✍️ Décrivez brièvement le <b>motif du litige</b> :',
 };
 
 const sessions = () => adminDb().collection('telegramSessions');
+
+async function ask(chatId: string, session: LitigeSession) {
+  await sessions().doc(chatId).set({ ...session, createdAt: new Date().toISOString() });
+  return askForReply(chatId, QUESTIONS[session.step!]);
+}
+
+// Litige buttons, "g." prefix = whole splitter incident
+function rdvDayButtons(p: string, ticketId: string) {
+  return [
+    ...rdvDayOptions().map(d => [{ text: `📅 ${d.label}`, callback_data: `${p}rd:${d.code}:${ticketId}` }]),
+    [{ text: '📅 Autre date', callback_data: `${p}rdx:${ticketId}` }],
+    [{ text: '↩️ Retour', callback_data: `${p}lit:${ticketId}` }],
+  ];
+}
+function rdvSlotButtons(p: string, day: string, ticketId: string) {
+  const slots = RDV_SLOTS.map((s, i) => ({ text: s.replace(':00', 'h'), callback_data: `${p}rs:${day}:${i}:${ticketId}` }));
+  return [
+    [{ text: `RDV le ${dayLabel(day)} à :`, callback_data: 'done' }],
+    slots.slice(0, 3),
+    slots.slice(3, 6),
+    [{ text: '🕐 Autre heure', callback_data: `${p}rh:${day}:${ticketId}` }],
+    [{ text: '↩️ Retour', callback_data: `${p}lr:${LITIGE_REASONS.findIndex(r => r.code === 'RDV')}:${ticketId}` }],
+  ];
+}
 
 export async function POST(request: Request): Promise<Response> {
   if (request.headers.get('x-telegram-bot-api-secret-token') !== webhookSecret()) {
@@ -66,17 +102,22 @@ async function onMessage(base: string, message: any) {
     return sendMessage(chatId, '🚫 Votre accès a été suspendu par votre superviseur.');
   }
 
-  // Free-text answer to a pending litige question
-  const session = await sessions().doc(chatId).get();
-  if (session.exists && !text.startsWith('/')) {
-    const { ticketId, reasonCode, group } = session.data() as { ticketId: string; reasonCode: 'RDV' | 'AUTRE'; group?: boolean };
+  // Typed answer to a pending litige question
+  const snap = await sessions().doc(chatId).get();
+  if (snap.exists && !text.startsWith('/')) {
+    const session = snap.data() as LitigeSession;
+    const step: SessionStep = session.step || (session.reasonCode === 'RDV' ? 'RDV_DATE' : 'DETAIL');
+    if (step === 'DETAIL') {
+      await sessions().doc(chatId).delete();
+      return report(base, chatId, tech, session.ticketId, !!session.group, { kind: 'LITIGE', reasonCode: 'AUTRE', notes: text });
+    }
+    const rdv = step === 'RDV_TIME' ? rdvToIso(session.day || '', text.replace(/\s/g, '').replace(/h$/i, 'h00')) : parseRdvText(text);
+    if (!rdv) {
+      // Not understood: ask again instead of recording an unusable date
+      return askForReply(chatId, `⚠️ Je n'ai pas compris « ${text} ».\n${QUESTIONS[step]}`);
+    }
     await sessions().doc(chatId).delete();
-    return report(base, chatId, tech, ticketId, !!group, {
-      kind: 'LITIGE',
-      reasonCode,
-      rdvDateTime: reasonCode === 'RDV' ? text : undefined,
-      notes: text,
-    });
+    return report(base, chatId, tech, session.ticketId, !!session.group, { kind: 'LITIGE', reasonCode: 'RDV', rdvDateTime: rdv });
   }
 
   if (text.startsWith('/a_declarer')) return listToDeclare(base, chatId, tech);
@@ -134,7 +175,7 @@ async function listToDeclare(base: string, chatId: string, tech: Technician) {
 async function onCallback(base: string, query: any) {
   const chatId = String(query.message?.chat?.id ?? query.from.id);
   const messageId: number | undefined = query.message?.message_id;
-  const [rawAction, a, b] = String(query.data || '').split(':');
+  const [rawAction, a, b, c] = String(query.data || '').split(':');
   // "g." prefix: the action applies to the whole splitter incident
   const group = rawAction.startsWith('g.');
   const action = group ? rawAction.slice(2) : rawAction;
@@ -172,18 +213,55 @@ async function onCallback(base: string, query: any) {
       ]);
       return;
 
-    case 'lr': {
+    case 'lr': { // litige reason chosen
       const reason = LITIGE_REASONS[Number(a)];
       const ticketId = b;
       if (!reason) return answerCallback(query.id, 'Motif inconnu.');
       await answerCallback(query.id);
-      if (messageId) await editButtons(chatId, messageId, []);
-      if (NEEDS_DETAIL[reason.code]) {
-        await sessions().doc(chatId).set({ ticketId, reasonCode: reason.code, group, createdAt: new Date().toISOString() });
-        return askForReply(chatId, NEEDS_DETAIL[reason.code]);
+      if (reason.code === 'RDV') {
+        if (messageId) await editButtons(chatId, messageId, rdvDayButtons(p, ticketId));
+        return;
       }
+      if (reason.code === 'CLIENT_UNREACHABLE') {
+        if (messageId) await editButtons(chatId, messageId, [
+          [{ text: '📞 Demander un autre numéro', callback_data: `${p}ln:1:${ticketId}` }],
+          [{ text: '✔️ Enregistrer sans demande', callback_data: `${p}ln:0:${ticketId}` }],
+          [{ text: '↩️ Retour', callback_data: `${p}lit:${ticketId}` }],
+        ]);
+        return;
+      }
+      if (messageId) await editButtons(chatId, messageId, []);
+      if (reason.code === 'AUTRE') return ask(chatId, { ticketId, reasonCode: 'AUTRE', group, step: 'DETAIL' });
       return report(base, chatId, tech, ticketId, group, { kind: 'LITIGE', reasonCode: reason.code });
     }
+
+    case 'ln': // client unreachable, with or without a request for another number
+      await answerCallback(query.id);
+      if (messageId) await editButtons(chatId, messageId, []);
+      return report(base, chatId, tech, b, group, { kind: 'LITIGE', reasonCode: 'CLIENT_UNREACHABLE', requestNewContact: a === '1' });
+
+    case 'rd': // RDV day chosen → time slots
+      await answerCallback(query.id);
+      if (messageId) await editButtons(chatId, messageId, rdvSlotButtons(p, a, b));
+      return;
+
+    case 'rs': { // RDV slot chosen → recorded
+      const rdv = rdvToIso(a, RDV_SLOTS[Number(b)] || '');
+      if (!rdv) return answerCallback(query.id, 'Créneau inconnu.');
+      await answerCallback(query.id);
+      if (messageId) await editButtons(chatId, messageId, []);
+      return report(base, chatId, tech, c, group, { kind: 'LITIGE', reasonCode: 'RDV', rdvDateTime: rdv });
+    }
+
+    case 'rdx': // RDV on another date → typed
+      await answerCallback(query.id);
+      if (messageId) await editButtons(chatId, messageId, []);
+      return ask(chatId, { ticketId: a, reasonCode: 'RDV', group, step: 'RDV_DATE' });
+
+    case 'rh': // chosen day, another time → typed
+      await answerCallback(query.id);
+      if (messageId) await editButtons(chatId, messageId, []);
+      return ask(chatId, { ticketId: b, reasonCode: 'RDV', group, step: 'RDV_TIME', day: a });
 
     case 'back':
       await answerCallback(query.id);
@@ -210,7 +288,11 @@ async function report(base: string, chatId: string, tech: Technician, ticketId: 
     // Buttons of the ticket's messages become a status; after an NF, offer the declaration
     await afterTechnicianReport(base, tech, tickets, payload.kind);
     if (payload.kind === 'LITIGE') {
-      return sendMessage(chatId, `🔴 <b>Litige enregistré</b> pour ${what} (${first.lastLitigeReasonLabel}). L'orienteur est prévenu.`);
+      const details = [
+        first.lastLitigeRdvDate ? `📅 RDV le <b>${formatCasablancaDateTime(first.lastLitigeRdvDate)}</b>` : '',
+        first.lastLitigeNeedsContact ? '📞 Demande de nouveau numéro transmise à l\'orienteur.' : '',
+      ].filter(Boolean).join('\n');
+      return sendMessage(chatId, `🔴 <b>Litige enregistré</b> pour ${what} (${first.lastLitigeReasonLabel}). L'orienteur est prévenu.${details ? `\n${details}` : ''}`);
     }
   } catch (err) {
     if (err instanceof AccessError) return sendMessage(chatId, `⚠️ ${err.message}`);

@@ -28,7 +28,8 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
   onSuccess,
 }) => {
   const [activeAction, setActiveAction] = useState<'REOPEN' | 'VALIDATE'>('REOPEN');
-  const [newPhone, setNewPhone] = useState(ticket?.clientPhone || '');
+  // Empty = number unchanged (the current one is shown as placeholder)
+  const [newPhone, setNewPhone] = useState('');
   const [dispatcherNotes, setDispatcherNotes] = useState('');
   const [validationNotes, setValidationNotes] = useState('');
 
@@ -41,12 +42,18 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
       return;
     }
 
+    if (ticket.lastLitigeNeedsContact && !newPhone.trim()
+      && !window.confirm('Le technicien a demandé un autre numéro. Renvoyer quand même sans nouveau numéro ?')) {
+      return;
+    }
     store.reopenTicketWithUpdate({
       ticketId: ticket.id,
       actorName,
       dispatcherNotes: dispatcherNotes.trim(),
-      newPhone: newPhone.trim() !== ticket.clientPhone ? newPhone.trim() : undefined,
+      newPhone: newPhone.trim() && newPhone.trim() !== ticket.clientPhone ? newPhone.trim() : undefined,
     });
+    setNewPhone('');
+    setDispatcherNotes('');
 
     onSuccess();
     onClose();
@@ -101,6 +108,20 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
             </span>
           </div>
 
+          {ticket.lastLitigeNeedsContact && (
+            <div className="flex items-center gap-2 text-blue-900 bg-blue-50 p-2 rounded border border-blue-200 text-xs font-semibold">
+              <Phone className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>Le technicien demande un autre numéro pour joindre le client.</span>
+            </div>
+          )}
+
+          {ticket.lastLitigeNotes && (
+            <div className="flex items-start gap-2 text-slate-800 bg-white p-2 rounded border border-slate-200 text-xs">
+              <MessageSquare className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+              <span>Commentaire du technicien : <i>« {ticket.lastLitigeNotes} »</i></span>
+            </div>
+          )}
+
           {ticket.lastLitigeRdvDate && (
             <div className="flex items-center gap-2 text-amber-800 bg-amber-50 p-2 rounded border border-amber-200 text-xs">
               <Calendar className="w-4 h-4 text-amber-600 shrink-0" />
@@ -149,7 +170,7 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
             <form onSubmit={handleReopen} className="space-y-3 text-xs">
               <div>
                 <label className="text-[11px] font-semibold text-slate-700 block mb-1">
-                  Nouveau numéro de téléphone client (si corrigé/récupéré) :
+                  Nouveau numéro du client (laisser vide si inchangé) :
                 </label>
                 <div className="relative">
                   <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
@@ -157,7 +178,7 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
                     type="text"
                     value={newPhone}
                     onChange={e => setNewPhone(e.target.value)}
-                    placeholder="06..."
+                    placeholder={`Actuel : ${ticket.clientPhone || '—'}`}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-xs font-mono text-slate-900 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-slate-900"
                   />
                 </div>
@@ -178,7 +199,7 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
               </div>
 
               <div className="p-2.5 bg-blue-50 text-blue-900 rounded-lg text-[11px]">
-                ℹ️ Le ticket se réouvrira instantanément sur le Telegram du technicien avec cette mise à jour bien visible.
+                ℹ️ Le technicien reçoit sur Telegram un message de relance court : nouveau numéro (cliquable pour appeler) et votre consigne en premier.
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

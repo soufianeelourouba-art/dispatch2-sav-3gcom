@@ -41,6 +41,7 @@ const forTechnician = (t: Ticket) => ({
   currentStatus: t.currentStatus,
   lastLitigeReasonLabel: t.lastLitigeReasonLabel,
   lastDispatcherUpdateNotes: t.lastDispatcherUpdateNotes,
+  reopenedWithNewPhone: t.reopenedWithNewPhone,
   splitterRef: t.splitterRef,
   origin: t.origin,
   manualNature: t.manualNature,
@@ -80,11 +81,18 @@ function parseReport(raw: any): TechnicianReport {
     return { kind: 'NF', nfType: 'STANDARD', notes };
   }
   if (raw?.kind === 'LITIGE' && LITIGE_REASONS.some(r => r.code === raw.reasonCode)) {
+    // RDV: an ISO date (chosen with day + slot buttons in the app)
+    const rdv = typeof raw.rdvDateTime === 'string' && !Number.isNaN(Date.parse(raw.rdvDateTime))
+      ? new Date(raw.rdvDateTime).toISOString()
+      : undefined;
+    if (raw.reasonCode === 'RDV' && !rdv) throw new HttpError(400, "Choisissez le jour et l'heure du RDV.");
+    if (raw.reasonCode === 'AUTRE' && !notes?.trim()) throw new HttpError(400, 'Décrivez le motif du litige.');
     return {
       kind: 'LITIGE',
       reasonCode: raw.reasonCode,
-      rdvDateTime: typeof raw.rdvDateTime === 'string' ? raw.rdvDateTime.slice(0, 60) : undefined,
+      rdvDateTime: rdv,
       notes,
+      requestNewContact: raw.reasonCode === 'CLIENT_UNREACHABLE' && raw.requestNewContact === true,
     };
   }
   throw new HttpError(400, 'Compte-rendu invalide');
