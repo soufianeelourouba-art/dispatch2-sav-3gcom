@@ -37,6 +37,7 @@ const SCREENS = {
     ['referentiel', 'Référentiel'],
     ['techniciens', 'Techniciens'],
     ['import', 'Import Excel'],
+    ['prestations', 'Prestations'],
   ],
   DISPATCHER: [
     ['dispatch', 'Dispatch du jour'],
@@ -44,6 +45,7 @@ const SCREENS = {
     ['import', 'Importer Excel'],
     ['techniciens', 'Mes techniciens'],
     ['files', 'Files spéciales'],
+    ['prestations', 'Prestations'],
   ],
 } as const;
 

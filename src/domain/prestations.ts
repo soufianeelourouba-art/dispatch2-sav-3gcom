@@ -36,6 +36,7 @@ export interface PrestationDeclaration {
   photoIds: string[];
   declaredAt: string;
   declaredBy: string;
+  declaredByTechId?: string; // set since the Prestations screen (older declarations: name only)
 }
 
 // À déclarer → Déclarée. For a splitter incident the prestation is paid once: the other tickets

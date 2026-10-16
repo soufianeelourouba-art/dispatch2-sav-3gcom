@@ -22,6 +22,7 @@ import { normalizeSplitterRef } from '../domain/splitter';
 import { isInDailyScope } from '../domain/dailyScope';
 import { buildReopenedTicket, classifyKnownTicket, opensNewCycle, type ImportOutcome } from '../domain/importRules';
 import { formatCasablancaDateTime } from '../domain/format';
+import type { Tarifs } from '../domain/prestationReport';
 import {
   collection,
   doc,
@@ -84,6 +85,7 @@ class AppStateStore {
   private tickets: Ticket[] = [];
   private events: TicketEvent[] = [];
   private telegramBotUsername: string = '';
+  private tarifs: Tarifs = {};
   private listeners: Set<() => void> = new Set();
   private authStatus: AuthStatus = 'LOADING';
   private dataUnsubscribers: Unsubscribe[] = [];
@@ -182,6 +184,7 @@ class AppStateStore {
     this.listen<ZoneAlias>(collection(db, 'zoneAliases'), items => (this.zoneAliases = items), 'alias');
     this.listen<any>(collection(db, 'settings'), items => {
       this.telegramBotUsername = items.find(s => s.id === 'telegram_info')?.username || '';
+      this.tarifs = items.find(s => s.id === 'tarifs')?.prices || {};
     }, 'paramètres');
 
     const withSla = (items: Ticket[]) =>
@@ -228,6 +231,7 @@ class AppStateStore {
     this.tickets = [];
     this.events = [];
     this.telegramBotUsername = '';
+    this.tarifs = {};
   }
 
   public syncDocToFirestore(collectionName: string, docId: string, data: any) {
@@ -542,6 +546,17 @@ class AppStateStore {
   public setTelegramBotUsername(username: string) {
     this.telegramBotUsername = username;
     this.syncDocToFirestore('settings', 'telegram_info', { username, updatedAt: new Date().toISOString() });
+    this.notify();
+  }
+
+  // Unit prices of the prestations (DH), set by the manager (settings/tarifs)
+  public getTarifs(): Tarifs {
+    return this.tarifs;
+  }
+
+  public setTarifs(prices: Tarifs) {
+    this.tarifs = prices;
+    this.syncDocToFirestore('settings', 'tarifs', { prices, updatedAt: new Date().toISOString() });
     this.notify();
   }
 

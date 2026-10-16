@@ -23,6 +23,7 @@ const DISPATCHER_TABS: NavTab[] = [
   { id: 'import', label: 'Importer Excel' },
   { id: 'techniciens', label: 'Mes techniciens' },
   { id: 'files', label: 'Files spéciales' },
+  { id: 'prestations', label: 'Prestations' },
 ];
 
 const MANAGER_TABS: NavTab[] = [
@@ -30,6 +31,7 @@ const MANAGER_TABS: NavTab[] = [
   { id: 'referentiel', label: 'Référentiel' },
   { id: 'techniciens', label: 'Techniciens' },
   { id: 'import', label: 'Import Excel' },
+  { id: 'prestations', label: 'Prestations' },
 ];
 
 export const Navbar: React.FC<NavbarProps> = ({

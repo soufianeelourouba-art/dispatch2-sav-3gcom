@@ -111,6 +111,7 @@ export async function declarePrestation(tech: Technician, ticketId: string, payl
     photoIds,
     declaredAt: now,
     declaredBy: tech.fullName,
+    declaredByTechId: tech.id,
   };
   const event: TicketEvent = {
     id: `evt-${Date.now()}-${randomBytes(3).toString('hex')}`,

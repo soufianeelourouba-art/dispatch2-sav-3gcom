@@ -14,6 +14,7 @@ import { TelegramSimulatorDrawer } from './components/telegram/TelegramSimulator
 import { TicketHistoryModal } from './components/TicketHistoryModal';
 import { LoginView } from './components/auth/LoginView';
 import { TechnicianMobilePortal } from './components/technician/TechnicianMobilePortal';
+import { PrestationsView } from './components/prestations/PrestationsView';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(store.getCurrentUser());
@@ -129,6 +130,10 @@ export default function App() {
               <TechniciensView currentUser={currentUser} />
             )}
 
+            {activeTab === 'prestations' && (
+              <PrestationsView currentUser={currentUser} onOpenTicketHistory={t => setInspectedTicket(t)} />
+            )}
+
             {activeTab === 'files' && (
               <SpecialQueuesView
                 currentUser={currentUser}
@@ -143,6 +148,10 @@ export default function App() {
           <>
             {activeTab === 'manager-dashboard' && (
               <ManagerDashboardView onOpenTicketHistory={t => setInspectedTicket(t)} />
+            )}
+
+            {activeTab === 'prestations' && (
+              <PrestationsView currentUser={currentUser} onOpenTicketHistory={t => setInspectedTicket(t)} />
             )}
 
             {activeTab === 'referentiel' && (
