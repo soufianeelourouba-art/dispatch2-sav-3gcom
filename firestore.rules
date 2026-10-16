@@ -46,9 +46,16 @@ service cloud.firestore {
       allow read: if hasProfile();
       allow write: if isManager();
     }
+    // Orienteurs create and rename the zones of their own sectors (never move one to another
+    // sector); deleting a zone stays with the manager.
     match /technicalZones/{id} {
       allow read: if hasProfile();
-      allow write: if isManager();
+      allow create: if isManager()
+        || (isDispatcher() && inMySectors(request.resource.data.sectorId));
+      allow update: if isManager()
+        || (isDispatcher() && inMySectors(resource.data.sectorId)
+            && request.resource.data.sectorId == resource.data.sectorId);
+      allow delete: if isManager();
     }
     match /settings/{id} {
       allow read: if hasProfile();

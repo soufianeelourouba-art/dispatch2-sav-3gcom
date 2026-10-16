@@ -28,6 +28,7 @@ import {
   Lock
 } from 'lucide-react';
 import { TelegramLinkModal } from './TelegramLinkModal';
+import { ZonesPanel } from '../orienteur/ZonesPanel';
 
 interface TechniciensViewProps {
   currentUser?: User;
@@ -36,7 +37,7 @@ interface TechniciensViewProps {
 export const TechniciensView: React.FC<TechniciensViewProps> = ({ currentUser }) => {
   const isDispatcher = currentUser?.role === 'DISPATCHER';
 
-  const [activeTab, setActiveTab] = useState<'LIST' | 'DEDUP' | 'NEW'>('LIST');
+  const [activeTab, setActiveTab] = useState<'LIST' | 'DEDUP' | 'NEW' | 'ZONES'>('LIST');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDcFilter, setSelectedDcFilter] = useState<string>('ALL');
   const [selectedSectorFilter, setSelectedSectorFilter] = useState<string>('ALL');
@@ -367,7 +368,21 @@ export const TechniciensView: React.FC<TechniciensViewProps> = ({ currentUser })
           <AlertTriangle className="w-3.5 h-3.5" />
           <span>Doublons & Déduplication ({duplicateGroups.length})</span>
         </button>
+        {isDispatcher && (
+          <button
+            onClick={() => setActiveTab('ZONES')}
+            className={`px-3 py-1.5 rounded-lg transition-colors ${
+              activeTab === 'ZONES' ? 'bg-brand-navy-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Zones d'intervention ({allowedZones.length})
+          </button>
+        )}
       </div>
+
+      {activeTab === 'ZONES' && isDispatcher && (
+        <ZonesPanel currentUser={currentUser} onCreated={label => { setSuccessMsg(`Zone « ${label} » créée. Affectez-la maintenant à vos techniciens.`); setTimeout(() => setSuccessMsg(null), 4000); }} />
+      )}
 
       {/* Tab: Technicians List */}
       {activeTab === 'LIST' && (

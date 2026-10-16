@@ -20,6 +20,8 @@ await db.doc(`users/${user.uid}`).set({ id: user.uid, email, username: email, na
 await db.doc('tickets/tkt-RULES-MINE').set({ id: 'tkt-RULES-MINE', ticketNumber: 'RULES-MINE', sectorId: MY_SECTOR });
 await db.doc('tickets/tkt-RULES-OTHER').set({ id: 'tkt-RULES-OTHER', ticketNumber: 'RULES-OTHER', sectorId: OTHER_SECTOR });
 await db.doc('photos/ph-RULES-MINE').set({ id: 'ph-RULES-MINE', ticketId: 'tkt-RULES-MINE', sectorId: MY_SECTOR, dataUrl: 'data:image/jpeg;base64,AA==' });
+await db.doc('technicalZones/tz-RULES-MINE').set({ id: 'tz-RULES-MINE', sectorId: MY_SECTOR, label: 'Zone test', msanCode: 'ZT' });
+await db.doc('technicalZones/tz-RULES-OTHER').set({ id: 'tz-RULES-OTHER', sectorId: OTHER_SECTOR, label: 'Zone voisine', msanCode: 'ZV' });
 await db.doc('photos/ph-RULES-OTHER').set({ id: 'ph-RULES-OTHER', ticketId: 'tkt-RULES-OTHER', sectorId: OTHER_SECTOR, dataUrl: 'data:image/jpeg;base64,AA==' });
 
 const signIn = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseConfig.apiKey}`, {
@@ -60,6 +62,12 @@ const checks: [string, boolean, Promise<number>][] = [
   ['Lire sans être connecté', false, call('GET', '/sectors/sec-rab-sale', undefined, null)],
   ['Lire une photo de son secteur', true, call('GET', '/photos/ph-RULES-MINE')],
   ['Lire une photo d\'un autre secteur', false, call('GET', '/photos/ph-RULES-OTHER')],
+  ['Créer une zone dans son secteur', true, call('PATCH', '/technicalZones/tz-RULES-NEW', { fields: { sectorId: { stringValue: MY_SECTOR }, label: { stringValue: 'Nouvelle' } } })],
+  ['Créer une zone dans un autre secteur', false, call('PATCH', '/technicalZones/tz-RULES-HACK', { fields: { sectorId: { stringValue: OTHER_SECTOR }, label: { stringValue: 'x' } } })],
+  ['Renommer une zone de son secteur', true, call('PATCH', '/technicalZones/tz-RULES-MINE?updateMask.fieldPaths=label', { fields: { label: { stringValue: 'Renommée' } } })],
+  ['Déplacer une zone vers un autre secteur', false, call('PATCH', '/technicalZones/tz-RULES-MINE?updateMask.fieldPaths=sectorId', { fields: { sectorId: { stringValue: OTHER_SECTOR } } })],
+  ["Renommer une zone d'un autre secteur", false, call('PATCH', '/technicalZones/tz-RULES-OTHER?updateMask.fieldPaths=label', { fields: { label: { stringValue: 'x' } } })],
+  ['Supprimer une zone (réservé au manager)', false, call('DELETE', '/technicalZones/tz-RULES-MINE')],
   ['Ajouter une photo (réservé au serveur)', false, call('PATCH', '/photos/ph-RULES-HACK', { fields: { sectorId: { stringValue: MY_SECTOR } } })],
 ];
 
@@ -77,6 +85,7 @@ await Promise.all([
   db.doc(`users/${user.uid}`).delete(),
   ...['tkt-RULES-MINE', 'tkt-RULES-OTHER', 'tkt-RULES-NEW', 'tkt-RULES-HACK'].map(id => db.doc(`tickets/${id}`).delete()),
   ...['ph-RULES-MINE', 'ph-RULES-OTHER', 'ph-RULES-HACK'].map(id => db.doc(`photos/${id}`).delete()),
+  ...['tz-RULES-MINE', 'tz-RULES-OTHER', 'tz-RULES-NEW', 'tz-RULES-HACK'].map(id => db.doc(`technicalZones/${id}`).delete()),
 ]);
 console.log(failures === 0 ? '\nToutes les règles se comportent comme prévu.' : `\n${failures} vérification(s) en échec.`);
 process.exit(failures === 0 ? 0 : 1);
