@@ -42,7 +42,13 @@ export type TechnicianReport =
 
 // Appends the technician's NF / litige event and updates the ticket atomically.
 // Only the technician currently assigned to an open ticket may report on it.
-export async function recordTechnicianReport(tech: Technician, ticketId: string, report: TechnicianReport): Promise<Ticket> {
+// An NF leaves the prestation "à déclarer" unless `extra` says otherwise.
+export async function recordTechnicianReport(
+  tech: Technician,
+  ticketId: string,
+  report: TechnicianReport,
+  extra: Partial<Ticket> = {}
+): Promise<Ticket> {
   const db = adminDb();
   const ticketRef = db.collection('tickets').doc(ticketId);
 
@@ -84,7 +90,11 @@ export async function recordTechnicianReport(tech: Technician, ticketId: string,
           notes: report.notes,
         };
 
-    const updated = applyEventToTicket(ticket, event, [...events, event]);
+    const updated: Ticket = {
+      ...applyEventToTicket(ticket, event, [...events, event]),
+      ...(report.kind === 'NF' ? { prestationStatus: 'A_DECLARER' as const } : {}),
+      ...extra,
+    };
     tx.set(db.collection('events').doc(event.id), clean(event));
     tx.set(ticketRef, clean(updated));
     return updated;
@@ -108,7 +118,14 @@ export async function splitterSiblings(tech: Technician, ticket: Ticket): Promis
 }
 
 // NF / litige on every open ticket of the splitter incident (or just the ticket without splitter).
-export async function recordSplitterReport(tech: Technician, ticketId: string, report: TechnicianReport): Promise<Ticket[]> {
+// For an NF the prestation is paid once: the ticket acted on carries it ("lead"), the others
+// are "INCLUSE" and point to it. Returned list starts with the lead.
+export async function recordSplitterReport(
+  tech: Technician,
+  ticketId: string,
+  report: TechnicianReport,
+  leadExtra: Partial<Ticket> = {}
+): Promise<Ticket[]> {
   const snap = await adminDb().collection('tickets').doc(ticketId).get();
   if (!snap.exists) throw new AccessError('Ticket introuvable.');
   const ticket = { ...(snap.data() as Ticket), id: snap.id };
@@ -118,10 +135,15 @@ export async function recordSplitterReport(tech: Technician, ticketId: string, r
   const notes = ticket.splitterRef && siblings.length > 1
     ? `${report.notes ? report.notes + ' — ' : ''}Compte-rendu collectif splitter ${ticket.splitterRef} (${siblings.length} tickets).`
     : report.notes;
+  const ordered = [...siblings].sort((a, b) => Number(b.id === ticketId) - Number(a.id === ticketId));
   const updated: Ticket[] = [];
-  for (const sibling of siblings) {
+  for (const sibling of ordered) {
+    const lead = updated[0];
+    const extra = report.kind === 'NF' && lead
+      ? { prestationStatus: 'INCLUSE' as const, collectiveLeadTicketId: lead.id }
+      : report.kind === 'NF' ? leadExtra : {};
     try {
-      updated.push(await recordTechnicianReport(tech, sibling.id, { ...report, notes }));
+      updated.push(await recordTechnicianReport(tech, sibling.id, { ...report, notes }, extra));
     } catch (err) {
       if (!(err instanceof AccessError)) throw err; // a sibling closed meanwhile: skip it
     }

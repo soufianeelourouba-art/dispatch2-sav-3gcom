@@ -4,6 +4,8 @@ import { adminDb } from './_lib/admin.js';
 import { requireStaff, json, handleError, HttpError } from './_lib/http.js';
 import { telegram } from './_lib/telegram.js';
 import { webhookSecret } from './_lib/webhookSecret.js';
+import { appBaseUrl, BOT_COMMANDS, setTechnicianMenu } from './_lib/miniapp.js';
+import type { Technician } from '../src/types/index.js';
 
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -27,9 +29,13 @@ export async function POST(request: Request): Promise<Response> {
       allowed_updates: ['message', 'callback_query'],
       drop_pending_updates: true,
     });
-    await telegram('setMyCommands', {
-      commands: [{ command: 'tickets', description: 'Mes interventions en cours' }],
-    });
+    await telegram('setMyCommands', { commands: BOT_COMMANDS });
+
+    // "Mon espace" menu button for every technician already linked to Telegram
+    const linked = await adminDb().collection('technicians').where('telegramActivationStatus', '==', 'ACTIVATED').get();
+    for (const doc of linked.docs) {
+      await setTechnicianMenu(appBaseUrl(request), { ...(doc.data() as Technician), id: doc.id }).catch(() => {});
+    }
 
     await adminDb().collection('settings').doc('telegram_info').set(
       { username: bot.username, webhookUrl, updatedAt: new Date().toISOString() },

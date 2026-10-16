@@ -93,6 +93,13 @@ service cloud.firestore {
       allow delete: if isManager();
     }
 
+    // --- Photos taken by technicians (written by the server only)
+    match /photos/{id} {
+      allow read: if isManager()
+        || (isDispatcher() && inMySectors(resource.data.get('sectorId', null)));
+      allow write: if false;
+    }
+
     // --- Ticket events: append-only audit trail
     match /events/{id} {
       allow read: if isManager()

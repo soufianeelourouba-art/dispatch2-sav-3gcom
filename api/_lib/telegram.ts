@@ -1,7 +1,9 @@
 // Minimal Telegram Bot API client. The token only exists in the server environment.
+// Either a callback button or a button opening the technician app inside Telegram (Mini App)
 export interface InlineButton {
   text: string;
-  callback_data: string;
+  callback_data?: string;
+  web_app?: { url: string };
 }
 
 function botToken(): string {

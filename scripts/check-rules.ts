@@ -19,6 +19,8 @@ const user = await auth.createUser({ email, password });
 await db.doc(`users/${user.uid}`).set({ id: user.uid, email, username: email, name: 'Test règles', role: 'DISPATCHER', sectorIds: [MY_SECTOR] });
 await db.doc('tickets/tkt-RULES-MINE').set({ id: 'tkt-RULES-MINE', ticketNumber: 'RULES-MINE', sectorId: MY_SECTOR });
 await db.doc('tickets/tkt-RULES-OTHER').set({ id: 'tkt-RULES-OTHER', ticketNumber: 'RULES-OTHER', sectorId: OTHER_SECTOR });
+await db.doc('photos/ph-RULES-MINE').set({ id: 'ph-RULES-MINE', ticketId: 'tkt-RULES-MINE', sectorId: MY_SECTOR, dataUrl: 'data:image/jpeg;base64,AA==' });
+await db.doc('photos/ph-RULES-OTHER').set({ id: 'ph-RULES-OTHER', ticketId: 'tkt-RULES-OTHER', sectorId: OTHER_SECTOR, dataUrl: 'data:image/jpeg;base64,AA==' });
 
 const signIn = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseConfig.apiKey}`, {
   method: 'POST',
@@ -46,7 +48,7 @@ const inQuery = (collection: string, field: string, values: string[]) => ({
 const checks: [string, boolean, Promise<number>][] = [
   ['Lire son propre profil', true, call('GET', `/users/${user.uid}`)],
   ['Lire les tickets de son secteur', true, call('POST', ':runQuery', inQuery('tickets', 'sectorId', [MY_SECTOR]))],
-  ['Lire les secteurs (référentiel)', true, call('GET', '/sectors/sec-rab-sale')],
+  ['Lire les secteurs (référentiel)', true, call('GET', '/sectors')],
   ['Créer un ticket dans son secteur', true, call('PATCH', '/tickets/tkt-RULES-NEW', { fields: { sectorId: { stringValue: MY_SECTOR } } })],
   ['Lire les tickets d\'un autre secteur', false, call('POST', ':runQuery', inQuery('tickets', 'sectorId', [OTHER_SECTOR]))],
   ['Lire un ticket d\'un autre secteur', false, call('GET', '/tickets/tkt-RULES-OTHER')],
@@ -56,6 +58,9 @@ const checks: [string, boolean, Promise<number>][] = [
   ['Créer un ticket dans un autre secteur', false, call('PATCH', '/tickets/tkt-RULES-HACK', { fields: { sectorId: { stringValue: OTHER_SECTOR } } })],
   ['Modifier un secteur', false, call('PATCH', '/sectors/sec-rab-sale?updateMask.fieldPaths=name', { fields: { name: { stringValue: 'x' } } })],
   ['Lire sans être connecté', false, call('GET', '/sectors/sec-rab-sale', undefined, null)],
+  ['Lire une photo de son secteur', true, call('GET', '/photos/ph-RULES-MINE')],
+  ['Lire une photo d\'un autre secteur', false, call('GET', '/photos/ph-RULES-OTHER')],
+  ['Ajouter une photo (réservé au serveur)', false, call('PATCH', '/photos/ph-RULES-HACK', { fields: { sectorId: { stringValue: MY_SECTOR } } })],
 ];
 
 let failures = 0;
@@ -71,6 +76,7 @@ await Promise.all([
   auth.deleteUser(user.uid),
   db.doc(`users/${user.uid}`).delete(),
   ...['tkt-RULES-MINE', 'tkt-RULES-OTHER', 'tkt-RULES-NEW', 'tkt-RULES-HACK'].map(id => db.doc(`tickets/${id}`).delete()),
+  ...['ph-RULES-MINE', 'ph-RULES-OTHER', 'ph-RULES-HACK'].map(id => db.doc(`photos/${id}`).delete()),
 ]);
 console.log(failures === 0 ? '\nToutes les règles se comportent comme prévu.' : `\n${failures} vérification(s) en échec.`);
 process.exit(failures === 0 ? 0 : 1);

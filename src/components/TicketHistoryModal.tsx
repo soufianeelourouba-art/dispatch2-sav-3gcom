@@ -2,6 +2,7 @@ import React from 'react';
 import { Ticket, TicketEvent } from '../types';
 import { store } from '../services/storage';
 import { formatCasablancaDateTime } from '../domain/format';
+import { PrestationPanel } from './tickets/PrestationPanel';
 import { 
   X, 
   Clock, 
@@ -83,6 +84,8 @@ export const TicketHistoryModal: React.FC<TicketHistoryModalProps> = ({ ticket, 
             </span>
           </div>
         </div>
+
+        <PrestationPanel ticket={ticket} />
 
         {/* Events Timeline */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -208,6 +211,7 @@ function renderEventTitle(type: string): string {
   switch (type) {
     case 'IMPORT': return '📥 Import / Enregistrement initial';
     case 'MANUAL_CREATED': return '🛠 Ticket hors opérateur créé';
+    case 'PRESTATION_DECLARED': return '📝 Prestation déclarée';
     case 'PROPOSED': return '💡 Proposition moteur calculée';
     case 'ASSIGNED': return '👤 Affectation validée';
     case 'REASSIGNED': return '🔄 Réaffectation manuelle';

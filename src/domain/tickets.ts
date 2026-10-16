@@ -30,8 +30,11 @@ export function computeTicketSLA(registeredAt: string): {
 }
 
 // --- Invariant 2: Pure status reducer from append-only events (§8.2) ---
+// Events recorded on a ticket that do not change its operational status
+const NON_STATUS_EVENTS = new Set<TicketEvent['eventType']>(['PRESTATION_DECLARED']);
+
 export function reduceTicketStatus(events: TicketEvent[], ticket: Partial<Ticket>): TicketStatus {
-  const sorted = [...events].sort(
+  const sorted = events.filter(e => !NON_STATUS_EVENTS.has(e.eventType)).sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
 
@@ -113,7 +116,11 @@ export function applyEventToTicket(ticket: Ticket, newEvent: TicketEvent, allTic
 const escapeHtml = (value: string | number | undefined) =>
   String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+// Placeholder references ("N/A", "—") are not shown to the technician.
+const hasClientRef = (ref?: string) => !!ref && !['N/A', '—', '-', ''].includes(ref.trim());
+
 // Work order sent to the technician on Telegram (HTML parse mode).
+// Separators are kept short so they never wrap on a phone screen.
 export function formatTicketMessage(ticket: Ticket): string {
   let historyBanner = '';
   if (ticket.visitCount > 1) {
@@ -136,17 +143,17 @@ export function formatTicketMessage(ticket: Ticket): string {
 
   return (
     `🚨 <b>INTERVENTION FIBRE OPTIQUE 3GCOM</b>\n` +
-    `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `━━━━━━━━━━━━━━\n` +
     manualBanner +
     `📋 <b>Ticket :</b> ${escapeHtml(ticket.ticketNumber)}\n` +
-    `👤 <b>Abonné :</b> ${escapeHtml(ticket.clientName)} (Réf : ${escapeHtml(ticket.clientNumber)})\n` +
+    `👤 <b>Abonné :</b> ${escapeHtml(ticket.clientName)}${hasClientRef(ticket.clientNumber) ? ` (Réf : ${escapeHtml(ticket.clientNumber)})` : ''}\n` +
     `📞 <b>Téléphone :</b> ${escapeHtml(ticket.clientPhone)}\n` +
     `📍 <b>Adresse :</b> ${escapeHtml(ticket.clientAddress)}\n` +
     `🏢 <b>Zone MSAN :</b> ${escapeHtml(ticket.rawZoneText)}` +
     (ticket.splitterRef ? `\n🔌 <b>Splitter :</b> ${escapeHtml(ticket.splitterRef)}` : '') +
     historyBanner +
     reopenBanner +
-    `\n━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `\n━━━━━━━━━━━━━━\n` +
     `<i>Répondez avec l'un des boutons ci-dessous.</i>`
   );
 }
@@ -163,11 +170,11 @@ export function formatSplitterGroupMessage(splitterRef: string, tickets: Ticket[
   );
   return (
     `🔴 <b>INCIDENT SPLITTER ${escapeHtml(splitterRef)}</b>\n` +
-    `━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `━━━━━━━━━━━━━━\n` +
     `👥 <b>${tickets.length} clients impactés</b> · Zone ${escapeHtml(tickets[0]?.rawZoneText)}\n` +
     `Priorité : un seul problème à résoudre sur le splitter.\n\n` +
     lines.join('\n') +
-    `\n━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `\n━━━━━━━━━━━━━━\n` +
     `<i>Le compte-rendu (NF ou litige) s'applique aux ${tickets.length} tickets.</i>`
   );
 }

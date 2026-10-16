@@ -27,6 +27,7 @@ import {
   onSnapshot,
   deleteDoc,
   query,
+  getDocs,
   where,
   writeBatch,
   waitForPendingWrites,
@@ -301,6 +302,19 @@ class AppStateStore {
 
   public getAllUsers(): User[] {
     return this.users;
+  }
+
+  // Technician photos of a ticket (loaded on demand: they are large). The sector filter lets
+  // Firestore check the orienteur's access rule on the query.
+  public async getTicketPhotos(ticket: Ticket): Promise<{ id: string; kind: string; dataUrl: string; createdAt: string }[]> {
+    const snap = await getDocs(query(
+      collection(db, 'photos'),
+      where('ticketId', '==', ticket.id),
+      where('sectorId', '==', ticket.sectorId || null)
+    ));
+    return snap.docs
+      .map(d => d.data() as { id: string; kind: string; dataUrl: string; createdAt: string })
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   // Orienteurs of a sector. The account's sectorIds is the single source of truth (it also

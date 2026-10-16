@@ -81,6 +81,10 @@ describe('reduceTicketStatus', () => {
     expect(reduceTicketStatus(types.map(t => event(t)), ticket())).toBe(expected);
   });
 
+  it('la déclaration de prestation après le NF ne change pas le statut', () => {
+    expect(reduceTicketStatus(['IMPORT', 'ASSIGNED', 'NF_SUBMITTED', 'PRESTATION_DECLARED'].map(t => event(t as EventType)), ticket())).toBe('COMPLETED');
+  });
+
   it('se base sur la date des événements, pas sur leur ordre de réception', () => {
     const late = event('NF_SUBMITTED');
     const early = event('ASSIGNED', { createdAt: '2026-01-01T00:00:00Z' });

@@ -1,7 +1,10 @@
 // Technician mobile portal (no account): the secret activation token is the credential.
-// GET  /api/portal?token=act_…  → technician name + open tickets assigned to them
-// POST /api/portal { token, ticketId, report, scope? } → records an NF or a litige
-//      (scope "SPLITTER": on every open ticket of the same splitter)
+// Also opened inside Telegram as a Mini App ("Mon espace" menu, "Déclarer" buttons).
+// GET  /api/portal?token=act_…  → technician, open tickets, tickets to declare, recent declarations
+// POST /api/portal { token, action, ... }
+//   action "REPORT"  (default) { ticketId, report, scope? } → quick NF / litige
+//   action "NF_FORM" { ticketId, scope?, nfType, ontSerialNumber?, serialPhotos?, declaration? }
+//   action "DECLARE" { ticketId, declaration }               → prestation of a closed ticket
 import { json, handleError, HttpError } from './_lib/http.js';
 import {
   AccessError,
@@ -12,7 +15,9 @@ import {
   technicianIsBlocked,
   type TechnicianReport,
 } from './_lib/tickets.js';
+import { declarePrestation, submitNfForm, technicianPrestations, ValidationError } from './_lib/prestations.js';
 import { LITIGE_REASONS } from '../src/types/index.js';
+import type { Ticket } from '../src/types/index.js';
 
 async function technicianFrom(token: unknown) {
   const tech = typeof token === 'string' ? await findTechnicianByToken(token) : null;
@@ -20,30 +25,47 @@ async function technicianFrom(token: unknown) {
   return tech;
 }
 
+// Fields the technician needs (no internal data)
+const forTechnician = (t: Ticket) => ({
+  id: t.id,
+  ticketNumber: t.ticketNumber,
+  clientName: t.clientName,
+  clientNumber: t.clientNumber,
+  clientPhone: t.clientPhone,
+  clientAddress: t.clientAddress,
+  rawZoneText: t.rawZoneText,
+  registeredAt: t.registeredAt,
+  visitCount: t.visitCount,
+  currentStatus: t.currentStatus,
+  lastLitigeReasonLabel: t.lastLitigeReasonLabel,
+  lastDispatcherUpdateNotes: t.lastDispatcherUpdateNotes,
+  splitterRef: t.splitterRef,
+  origin: t.origin,
+  manualNature: t.manualNature,
+  description: t.description,
+  nfType: t.nfType,
+  ontSerialNumber: t.ontSerialNumber,
+  closedAt: t.isClosed ? t.lastEventAt : undefined,
+  prestationStatus: t.prestationStatus,
+  prestation: t.prestation
+    ? { ...t.prestation, photoIds: undefined, photoCount: t.prestation.photoIds.length }
+    : undefined,
+});
+
 export async function GET(request: Request): Promise<Response> {
   try {
     const tech = await technicianFrom(new URL(request.url).searchParams.get('token'));
-    if (technicianIsBlocked(tech)) return json({ technician: { fullName: tech.fullName }, suspended: true, tickets: [] });
-
-    const tickets = (await openTicketsOf(tech.id)).map(t => ({
-      id: t.id,
-      ticketNumber: t.ticketNumber,
-      clientName: t.clientName,
-      clientNumber: t.clientNumber,
-      clientPhone: t.clientPhone,
-      clientAddress: t.clientAddress,
-      rawZoneText: t.rawZoneText,
-      registeredAt: t.registeredAt,
-      visitCount: t.visitCount,
-      currentStatus: t.currentStatus,
-      lastLitigeReasonLabel: t.lastLitigeReasonLabel,
-      lastDispatcherUpdateNotes: t.lastDispatcherUpdateNotes,
-      splitterRef: t.splitterRef,
-      origin: t.origin,
-      manualNature: t.manualNature,
-      description: t.description,
-    }));
-    return json({ technician: { fullName: tech.fullName }, suspended: false, tickets });
+    if (technicianIsBlocked(tech)) {
+      return json({ technician: { fullName: tech.fullName }, suspended: true, tickets: [], toDeclare: [], declared: [] });
+    }
+    const [open, prestations] = await Promise.all([openTicketsOf(tech.id), technicianPrestations(tech.id)]);
+    return json({
+      technician: { fullName: tech.fullName },
+      suspended: false,
+      tickets: open.map(forTechnician),
+      toDeclare: prestations.toDeclare.map(forTechnician),
+      declared: prestations.declared.map(forTechnician),
+    });
   } catch (err) {
     return handleError(err);
   }
@@ -52,13 +74,8 @@ export async function GET(request: Request): Promise<Response> {
 function parseReport(raw: any): TechnicianReport {
   const notes = typeof raw?.notes === 'string' ? raw.notes.slice(0, 1000) : undefined;
   if (raw?.kind === 'NF') {
-    return {
-      kind: 'NF',
-      nfType: raw.nfType === 'CENTRAL_CONFIG' ? 'CENTRAL_CONFIG' : 'STANDARD',
-      ontSerialNumber: typeof raw.ontSerialNumber === 'string' ? raw.ontSerialNumber.slice(0, 40) : undefined,
-      cableLengthMeters: Number.isFinite(raw.cableLengthMeters) ? Number(raw.cableLengthMeters) : undefined,
-      notes,
-    };
+    // Quick NF is standard only: config centrale goes through the form (serial + photo)
+    return { kind: 'NF', nfType: 'STANDARD', notes };
   }
   if (raw?.kind === 'LITIGE' && LITIGE_REASONS.some(r => r.code === raw.reasonCode)) {
     return {
@@ -78,13 +95,33 @@ export async function POST(request: Request): Promise<Response> {
     if (technicianIsBlocked(tech)) throw new HttpError(403, 'Accès suspendu');
     if (typeof body?.ticketId !== 'string') throw new HttpError(400, 'ticketId manquant');
     try {
-      const report = parseReport(body.report);
-      // scope "SPLITTER": one report closes every open ticket of the splitter incident
-      const tickets = body.scope === 'SPLITTER'
-        ? await recordSplitterReport(tech, body.ticketId, report)
-        : [await recordTechnicianReport(tech, body.ticketId, report)];
-      return json({ ticketNumbers: tickets.map(t => t.ticketNumber), status: tickets[0].currentStatus });
+      let tickets: Ticket[];
+      if (body.action === 'NF_FORM') {
+        tickets = await submitNfForm(tech, {
+          ticketId: body.ticketId,
+          scope: body.scope === 'SPLITTER' ? 'SPLITTER' : 'TICKET',
+          nfType: body.nfType === 'CENTRAL_CONFIG' ? 'CENTRAL_CONFIG' : 'STANDARD',
+          ontSerialNumber: typeof body.ontSerialNumber === 'string' ? body.ontSerialNumber.slice(0, 40) : undefined,
+          serialPhotos: body.serialPhotos,
+          declaration: body.declaration ?? undefined,
+        });
+      } else if (body.action === 'DECLARE') {
+        tickets = [await declarePrestation(tech, body.ticketId, body.declaration ?? {})];
+      } else {
+        const report = parseReport(body.report);
+        // scope "SPLITTER": one report closes every open ticket of the splitter incident
+        tickets = body.scope === 'SPLITTER'
+          ? await recordSplitterReport(tech, body.ticketId, report)
+          : [await recordTechnicianReport(tech, body.ticketId, report)];
+      }
+      return json({
+        ticketNumbers: tickets.map(t => t.ticketNumber),
+        leadTicketId: tickets[0].id,
+        status: tickets[0].currentStatus,
+        prestationStatus: tickets[0].prestationStatus,
+      });
     } catch (err) {
+      if (err instanceof ValidationError) throw new HttpError(400, err.message);
       if (err instanceof AccessError) throw new HttpError(409, err.message);
       throw err;
     }

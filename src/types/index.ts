@@ -1,3 +1,5 @@
+import type { PrestationDeclaration, PrestationStatus } from '../domain/prestations.js';
+
 export type Role = 'DISPATCHER' | 'MANAGER';
 
 // 1. Direction Centrale / Délégation Régionale (DC)
@@ -142,6 +144,7 @@ export const MANUAL_TICKET_NATURES: { code: ManualTicketNature; label: string; d
 export type EventType =
   | 'IMPORT'
   | 'MANUAL_CREATED'
+  | 'PRESTATION_DECLARED'
   | 'PROPOSED'
   | 'ASSIGNED'
   | 'REASSIGNED'
@@ -232,6 +235,14 @@ export interface Ticket {
   // Splitter shared by several clients: tickets of the same splitter (and sector) are one
   // collective incident, handled by one technician and closed together.
   splitterRef?: string;
+
+  // Prestation declared by the technician after the NF (paid work, see domain/prestations.ts)
+  prestationStatus?: PrestationStatus;
+  prestation?: PrestationDeclaration;
+  // Splitter incident closed collectively: ticket carrying the single declaration
+  collectiveLeadTicketId?: string;
+  // NF config centrale: photos of the ONT serial label (collection "photos")
+  serialPhotoIds?: string[];
 
   // Origin: imported operator ticket (default) or created in the app (hors ticket, billable)
   origin?: 'IMPORT' | 'MANUAL';
