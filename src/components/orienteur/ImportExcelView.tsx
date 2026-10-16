@@ -13,6 +13,7 @@ const OUTCOME_STYLES: Record<ImportOutcome, string> = {
   RETOUR_CLIENT: 'bg-amber-50 text-amber-800 border-amber-200',
 };
 import { parseExcelBuffer, generateSampleExcelFile, InterpretedRow, DetectedColumns } from '../../services/excelImporter';
+import { ticketOwners } from '../../services/api';
 import { 
   UploadCloud, 
   FileSpreadsheet, 
@@ -54,6 +55,7 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
   const [report, setReport] = useState<ImportReport | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [otherSectorCount, setOtherSectorCount] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,11 +63,25 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
   const sectorZones = store.getTechnicalZones(currentUser, selectedSectorId);
   const sectorTechs = store.getTechnicians(currentUser, selectedSectorId).filter(t => t.isActive);
 
-  const handleProcessFileBuffer = (buffer: ArrayBuffer, name: string) => {
+  const handleProcessFileBuffer = async (buffer: ArrayBuffer, name: string) => {
     try {
       setErrorMsg(null);
       setReport(null);
+      setOtherSectorCount(0);
       const parsed = parseExcelBuffer(buffer, selectedSectorId);
+      // Tickets already handled by a sector this account cannot see: excluded before the preview
+      if (currentUser.role !== 'MANAGER') {
+        const numbers = parsed.previewRows.filter(r => r.isValid).map(r => r.ticketNumber);
+        if (numbers.length) {
+          try {
+            const { owners } = await ticketOwners(numbers);
+            setOtherSectorCount(parsed.excludeOtherSectors(owners));
+          } catch {
+            setErrorMsg('Vérification des tickets impossible (connexion ?). Réessayez de charger le fichier.');
+            return;
+          }
+        }
+      }
       setFileName(name);
       setDetectedColumns(parsed.detectedColumns);
       setPreviewRows(parsed.previewRows);
@@ -354,6 +370,16 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
+
+          {otherSectorCount > 0 && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-300 text-amber-900 rounded-xl px-3 py-2.5 text-xs">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+              <span>
+                <b>{otherSectorCount} ticket(s) de ce fichier sont déjà gérés par un autre secteur</b> : ils ne seront pas importés
+                (voir « Rejetées »). Vérifiez que c'est bien le fichier de « {currentSectorObj?.name} ».
+              </span>
+            </div>
+          )}
 
           {detectedColumns && (
             <div className="flex flex-wrap gap-1.5 text-[11px]">

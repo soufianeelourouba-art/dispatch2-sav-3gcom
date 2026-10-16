@@ -40,3 +40,8 @@ export function createStaffAccount(data: { name: string; email: string; password
 export function deleteStaffAccount(userId: string) {
   return authedPost<{ ok: true }>('/api/accounts', { action: 'DELETE', userId });
 }
+
+// Before an import: tickets of the file already handled by a sector the user cannot see
+export function ticketOwners(ticketNumbers: string[]) {
+  return authedPost<{ owners: Record<string, string> }>('/api/ticket-owners', { ticketNumbers });
+}

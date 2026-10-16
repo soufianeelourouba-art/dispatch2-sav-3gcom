@@ -22,6 +22,7 @@ import { normalizeSplitterRef } from '../domain/splitter';
 import { isInDailyScope } from '../domain/dailyScope';
 import { buildReopenedTicket, classifyKnownTicket, opensNewCycle, type ImportOutcome } from '../domain/importRules';
 import { formatCasablancaDateTime } from '../domain/format';
+import { ticketDocId } from '../domain/ticketId';
 import type { Tarifs } from '../domain/prestationReport';
 import {
   collection,
@@ -56,11 +57,7 @@ function chunk<T>(list: T[], size: number): T[][] {
   return out;
 }
 
-// Ticket document id derived from the ticket number, so the same ticket imported
-// twice (even by two orienteurs) always lands on the same Firestore document.
-export function ticketDocId(ticketNumber: string): string {
-  return `tkt-${ticketNumber.trim().replace(/[^A-Za-z0-9_-]/g, '_')}`;
-}
+export { ticketDocId };
 
 // Firestore rejects `undefined` field values.
 function clean<T extends object>(data: T): T {
@@ -237,7 +234,28 @@ class AppStateStore {
   public syncDocToFirestore(collectionName: string, docId: string, data: any) {
     setDoc(doc(db, collectionName, docId), clean(data), { merge: true }).catch(err => {
       console.warn(`Enregistrement refusé ${collectionName}/${docId} :`, err?.message);
+      this.reportWriteError(collectionName, docId, err);
     });
+  }
+
+  // Writes refused by the server are shown on screen (the optimistic change is undone by
+  // Firestore), so that nothing disappears without explanation.
+  private writeErrors: { label: string; count: number } | null = null;
+
+  private reportWriteError(collectionName: string, docId: string, err: any) {
+    const what = collectionName === 'tickets' ? `ticket ${docId.replace(/^tkt-/, '')}` : `${collectionName}/${docId}`;
+    const reason = err?.code === 'permission-denied' ? 'accès refusé' : err?.message || 'erreur réseau';
+    this.writeErrors = { label: `${what} (${reason})`, count: (this.writeErrors?.count || 0) + 1 };
+    this.notify();
+  }
+
+  public getWriteErrors() {
+    return this.writeErrors;
+  }
+
+  public clearWriteErrors() {
+    this.writeErrors = null;
+    this.notify();
   }
 
   public deleteDocFromFirestore(collectionName: string, docId: string) {

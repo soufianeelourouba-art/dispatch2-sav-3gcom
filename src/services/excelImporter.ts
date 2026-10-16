@@ -17,6 +17,7 @@ export function parseExcelBuffer(
   totalRawRows: number;
   previewRows: InterpretedRow[];
   executeImport: () => ImportReport;
+  excludeOtherSectors: (owners: Record<string, string>) => number;
 } {
   const workbook = XLSX.read(buffer, { type: 'array' });
   const firstSheetName = workbook.SheetNames[0];
@@ -106,6 +107,21 @@ export function parseExcelBuffer(
     };
   };
 
+  // Tickets already handled by another sector (see api/ticket-owners.ts): shown as rejected
+  // with the reason, never written. Returns the number of rows excluded.
+  const excludeOtherSectors = (owners: Record<string, string>): number => {
+    let excluded = 0;
+    interpretedRows.forEach(row => {
+      const owner = owners[row.ticketNumber];
+      if (!row.isValid || !owner) return;
+      row.isValid = false;
+      row.rejectionReason = `Déjà géré par le secteur « ${owner} » : non importé`;
+      row.importOutcome = undefined;
+      excluded++;
+    });
+    return excluded;
+  };
+
   return {
     targetSectorName,
     detectedColumns: detected,
@@ -113,6 +129,7 @@ export function parseExcelBuffer(
     totalRawRows: rawRows.length,
     previewRows,
     executeImport,
+    excludeOtherSectors,
   };
 }
 

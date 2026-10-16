@@ -55,6 +55,7 @@ interface AppShellProps {
 export const AppShell: React.FC<AppShellProps> = ({ currentUser, sumCheck, activeTab, onTabChange, onLogout, children }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const items = navItems(currentUser, sumCheck);
+  const writeErrors = store.getWriteErrors();
   const active = items.find(i => i.id === activeTab) || items[0];
   const sectors = store.getSectors(currentUser);
   const scopeLabel = currentUser.role === 'DISPATCHER'
@@ -166,6 +167,17 @@ export const AppShell: React.FC<AppShellProps> = ({ currentUser, sumCheck, activ
             <b>Écart de comptage : {sumCheck.discrepancy > 0 ? `+${sumCheck.discrepancy}` : sumCheck.discrepancy} ticket(s).</b>
             {sumCheck.culpritTickets.length > 0 && <> Tickets concernés : {sumCheck.culpritTickets.map(c => c.ticketNumber).join(', ')}</>}
           </span>
+        </div>
+      )}
+
+      {writeErrors && (
+        <div className="mx-4 sm:mx-6 lg:mx-8 mt-4 flex items-start gap-2 bg-rose-50 border border-rose-300 text-rose-800 rounded-xl px-3 py-2 text-xs">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span className="flex-1">
+            <b>{writeErrors.count} enregistrement(s) refusé(s) par le serveur</b>, la modification a été annulée.
+            Dernier : {writeErrors.label}. Rechargez la page ; si cela continue, contactez le manager.
+          </span>
+          <button onClick={() => store.clearWriteErrors()} className="p-0.5 rounded hover:bg-rose-100" aria-label="Fermer"><X className="w-4 h-4" /></button>
         </div>
       )}
 
