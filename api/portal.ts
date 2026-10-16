@@ -16,6 +16,8 @@ import {
   type TechnicianReport,
 } from './_lib/tickets.js';
 import { declarePrestation, submitNfForm, technicianPrestations, ValidationError } from './_lib/prestations.js';
+import { afterDeclaration, afterTechnicianReport } from './_lib/afterReport.js';
+import { appBaseUrl } from './_lib/miniapp.js';
 import { LITIGE_REASONS } from '../src/types/index.js';
 import type { Ticket } from '../src/types/index.js';
 
@@ -96,7 +98,9 @@ export async function POST(request: Request): Promise<Response> {
     if (typeof body?.ticketId !== 'string') throw new HttpError(400, 'ticketId manquant');
     try {
       let tickets: Ticket[];
+      let kind: 'NF' | 'LITIGE' | 'DECLARE';
       if (body.action === 'NF_FORM') {
+        kind = 'NF';
         tickets = await submitNfForm(tech, {
           ticketId: body.ticketId,
           scope: body.scope === 'SPLITTER' ? 'SPLITTER' : 'TICKET',
@@ -106,14 +110,21 @@ export async function POST(request: Request): Promise<Response> {
           declaration: body.declaration ?? undefined,
         });
       } else if (body.action === 'DECLARE') {
+        kind = 'DECLARE';
         tickets = [await declarePrestation(tech, body.ticketId, body.declaration ?? {})];
       } else {
         const report = parseReport(body.report);
+        kind = report.kind;
         // scope "SPLITTER": one report closes every open ticket of the splitter incident
         tickets = body.scope === 'SPLITTER'
           ? await recordSplitterReport(tech, body.ticketId, report)
           : [await recordTechnicianReport(tech, body.ticketId, report)];
       }
+      // Keep the Telegram chat consistent (never fails the technician's action)
+      await (kind === 'DECLARE'
+        ? afterDeclaration(tickets[0].id)
+        : afterTechnicianReport(appBaseUrl(request), tech, tickets, kind)
+      ).catch(err => console.error('telegram follow-up', err));
       return json({
         ticketNumbers: tickets.map(t => t.ticketNumber),
         leadTicketId: tickets[0].id,

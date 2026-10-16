@@ -6,7 +6,7 @@ import { calculateDispatchProposals } from '../../services/dispatchEngine';
 import { telegramGateway } from '../../services/telegramSimulator';
 import { LitigeResolutionModal } from './LitigeResolutionModal';
 import { ManualTicketModal } from '../tickets/ManualTicketModal';
-import { SplitterBadge, ManualTicketBadge } from '../tickets/TicketBadges';
+import { SplitterBadge, ManualTicketBadge, NfSummary } from '../tickets/TicketBadges';
 import { SplitterIncidentsPanel } from '../tickets/SplitterIncidentsPanel';
 import { splitterKey, groupBySplitter } from '../../domain/splitter';
 import { 
@@ -652,6 +652,8 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
                     {ticket.description && (
                       <div className="text-xs text-violet-900 bg-violet-50 rounded-lg px-2.5 py-1.5">📝 {ticket.description}</div>
                     )}
+
+                    <NfSummary ticket={ticket} onOpen={() => onOpenTicketHistory(ticket)} />
 
                     <div className="text-xs space-y-0.5">
                       <div className="font-bold text-slate-900 text-sm">

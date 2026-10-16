@@ -19,6 +19,7 @@ import {
   type TechnicianReport,
 } from './_lib/tickets.js';
 import { technicianPrestations } from './_lib/prestations.js';
+import { afterTechnicianReport } from './_lib/afterReport.js';
 import { appBaseUrl, configNfButton, declareButton, setTechnicianMenu, technicianAppUrl, webAppButton } from './_lib/miniapp.js';
 import { LITIGE_REASONS } from '../src/types/index.js';
 import type { Technician } from '../src/types/index.js';
@@ -189,6 +190,9 @@ async function onCallback(base: string, query: any) {
       if (messageId) await editButtons(chatId, messageId, workOrderButtons(a, group));
       return;
 
+    case 'done': // status label of a ticket already handled
+      return answerCallback(query.id, 'Déjà traité ✅');
+
     default:
       return answerCallback(query.id);
   }
@@ -203,17 +207,11 @@ async function report(base: string, chatId: string, tech: Technician, ticketId: 
     const what = tickets.length > 1
       ? `les <b>${tickets.length} tickets</b> du splitter ${first.splitterRef}`
       : `le ticket ${first.ticketNumber}`;
-    if (payload.kind === 'NF') {
-      // Operation done: the prestation can be declared now or later (/a_declarer, Mon espace)
-      return sendMessage(
-        chatId,
-        `🟢 <b>NF enregistré</b> pour ${what}. Merci !\n` +
-          (tickets.length > 1 ? `Une seule prestation à déclarer pour cet incident (ticket ${first.ticketNumber}).\n` : '') +
-          `Déclarez la prestation maintenant ou plus tard depuis <b>Menu → /a_declarer</b>.`,
-        [[declareButton(base, tech, first.id)]]
-      );
+    // Buttons of the ticket's messages become a status; after an NF, offer the declaration
+    await afterTechnicianReport(base, tech, tickets, payload.kind);
+    if (payload.kind === 'LITIGE') {
+      return sendMessage(chatId, `🔴 <b>Litige enregistré</b> pour ${what} (${first.lastLitigeReasonLabel}). L'orienteur est prévenu.`);
     }
-    return sendMessage(chatId, `🔴 <b>Litige enregistré</b> pour ${what} (${first.lastLitigeReasonLabel}). L'orienteur est prévenu.`);
   } catch (err) {
     if (err instanceof AccessError) return sendMessage(chatId, `⚠️ ${err.message}`);
     throw err;

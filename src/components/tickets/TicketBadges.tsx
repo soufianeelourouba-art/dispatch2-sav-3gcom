@@ -1,6 +1,7 @@
 import React from 'react';
 import { Ticket, MANUAL_TICKET_NATURES } from '../../types';
 import { Cable, Wrench } from 'lucide-react';
+import { describeMaterials, hasMaterials, prestationLabel } from '../../domain/prestations';
 
 // "Splitter SP-12 · 4 tickets": highlighted when several open tickets share the splitter.
 export const SplitterBadge: React.FC<{ ticket: Ticket; groupSize?: number }> = ({ ticket, groupSize = 1 }) => {
@@ -16,6 +17,35 @@ export const SplitterBadge: React.FC<{ ticket: Ticket; groupSize?: number }> = (
       <Cable className="w-3 h-3" />
       <span>Splitter {ticket.splitterRef}{collective ? ` · ${groupSize} tickets` : ''}</span>
     </span>
+  );
+};
+
+// NF closure summary on ticket cards: type, ONT serial, photos and prestation state.
+export const NfSummary: React.FC<{ ticket: Ticket; onOpen?: () => void }> = ({ ticket, onOpen }) => {
+  if (ticket.currentStatus !== 'COMPLETED') return null;
+  const photos = (ticket.prestation?.photoIds.length || 0) + (ticket.serialPhotoIds?.length || 0);
+  const prestation =
+    ticket.prestationStatus === 'INCLUSE' ? <span className="text-slate-600">incluse dans l'incident splitter</span>
+    : ticket.prestation ? (
+      <b className="text-emerald-800">
+        {prestationLabel(ticket.prestation.code)}{ticket.prestation.raccordements ? ` × ${ticket.prestation.raccordements}` : ''}
+        {hasMaterials(ticket.prestation.materials) ? ` · ${describeMaterials(ticket.prestation.materials)}` : ''}
+      </b>
+    )
+    : <b className="text-brand-orange-600">à déclarer</b>;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full text-left text-xs bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5 flex flex-wrap gap-x-3 gap-y-0.5 hover:bg-emerald-100/70"
+      title="Voir le compte-rendu et les photos"
+    >
+      <span className="font-bold text-emerald-900">
+        {ticket.nfType === 'CENTRAL_CONFIG' ? `NF config centrale${ticket.ontSerialNumber ? ` · ONT ${ticket.ontSerialNumber}` : ''}` : 'NF standard'}
+      </span>
+      <span>Prestation : {prestation}</span>
+      {photos > 0 && <span className="text-slate-700">📷 {photos} photo{photos > 1 ? 's' : ''}</span>}
+    </button>
   );
 };
 

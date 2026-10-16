@@ -7,6 +7,7 @@ import { splitterKey } from '../../src/domain/splitter.js';
 import { LITIGE_REASONS } from '../../src/types/index.js';
 import type { LitigeReasonCode, Technician, Ticket, TicketEvent } from '../../src/types/index.js';
 import { sendMessage } from './telegram.js';
+import { trackMessage } from './telegramMessages.js';
 
 export class AccessError extends Error {}
 
@@ -185,13 +186,15 @@ export async function sendWorkOrdersTo(tech: Technician, tickets: Ticket[], reco
     const group = key ? allOpen.filter(t => splitterKey(t) === key) : [];
     if (group.length > 1) {
       group.forEach(t => handled.add(t.id));
-      await sendMessage(tech.telegramChatId, formatSplitterGroupMessage(ticket.splitterRef!, group), workOrderButtons(ticket.id, true));
+      const sent = await sendMessage(tech.telegramChatId, formatSplitterGroupMessage(ticket.splitterRef!, group), workOrderButtons(ticket.id, true));
+      await trackMessage(group.map(t => t.id), tech.telegramChatId, sent, 'orders');
       for (const t of group.filter(t => recordFor.has(t.id))) {
         await recordTelegramSent(tech, t, `Incident splitter ${ticket.splitterRef} (${group.length} tickets) transmis sur le Telegram de ${tech.fullName}.`);
       }
     } else {
       handled.add(ticket.id);
-      await sendMessage(tech.telegramChatId, formatTicketMessage(ticket), workOrderButtons(ticket.id));
+      const sent = await sendMessage(tech.telegramChatId, formatTicketMessage(ticket), workOrderButtons(ticket.id));
+      await trackMessage([ticket.id], tech.telegramChatId, sent, 'orders');
       if (recordFor.has(ticket.id)) {
         await recordTelegramSent(tech, ticket, `Ordre de travail transmis sur le Telegram de ${tech.fullName}.`);
       }

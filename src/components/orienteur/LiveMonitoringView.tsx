@@ -4,7 +4,7 @@ import { store } from '../../services/storage';
 import { formatCasablancaDateTime, formatCasablancaTimeOnly, formatSLADisplay } from '../../domain/format';
 import { exportTicketsToExcel } from '../../services/excelExporter';
 import { LitigeResolutionModal } from './LitigeResolutionModal';
-import { SplitterBadge, ManualTicketBadge } from '../tickets/TicketBadges';
+import { SplitterBadge, ManualTicketBadge, NfSummary } from '../tickets/TicketBadges';
 import { SplitterIncidentsPanel } from '../tickets/SplitterIncidentsPanel';
 import { splitterKey, groupBySplitter } from '../../domain/splitter';
 import { 
@@ -532,6 +532,8 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                   {ticket.description && (
                     <div className="text-xs text-violet-900 bg-violet-50 rounded-lg px-2.5 py-1.5">📝 {ticket.description}</div>
                   )}
+
+                  <NfSummary ticket={ticket} onOpen={() => onOpenTicketHistory(ticket)} />
 
                   <div className="text-xs">
                     <span className="font-bold text-slate-900 text-sm">{ticket.clientName}</span>
