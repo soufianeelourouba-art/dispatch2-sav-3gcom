@@ -166,6 +166,8 @@ export async function technicianPrestations(techId: string, declaredSinceDays = 
   const tickets = snap.docs.map(d => ({ ...(d.data() as Ticket), id: d.id }));
   const since = Date.now() - declaredSinceDays * 86400_000;
   return {
+    // Litiges accepted by the orienteur, waiting to be sent back (shown read-only)
+    onHold: tickets.filter(t => t.currentStatus === 'SUSPENDED'),
     toDeclare: tickets.filter(needsDeclaration).sort((a, b) => (b.lastEventAt || '').localeCompare(a.lastEventAt || '')),
     declared: tickets
       .filter(t => t.prestationStatus === 'DECLAREE' && t.prestation && Date.parse(t.prestation.declaredAt) >= since)

@@ -73,6 +73,7 @@ function translateStatus(status: string): string {
   switch (status) {
     case 'COMPLETED': return 'Normalisé (NF)';
     case 'LITIGE': return 'Litige Client (LC)';
+    case 'SUSPENDED': return 'Suspendu (motif validé)';
     case 'REOPENED': return 'Réouvert mise à jour';
     case 'ASSIGNED': return 'Transmis technicien';
     case 'PROPOSED': return 'Proposition en attente';

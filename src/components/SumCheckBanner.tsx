@@ -46,6 +46,10 @@ export const SumCheckBanner: React.FC<SumCheckBannerProps> = ({ sumCheck }) => {
           <span>
             Litiges (LC) : <span className="font-mono tabular-nums font-semibold text-rose-700">{breakdown.litige}</span>
           </span>
+          <span aria-hidden="true" className="text-slate-300">·</span>
+          <span>
+            Suspendus : <span className="font-mono tabular-nums font-semibold text-slate-700">{breakdown.suspended}</span>
+          </span>
         </div>
 
         {/* Right side: Strict Sum Validation (§8.3) */}

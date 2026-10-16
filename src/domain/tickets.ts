@@ -53,8 +53,10 @@ export function reduceTicketStatus(events: TicketEvent[], ticket: Partial<Ticket
     case 'NF_SUBMITTED':
       return 'COMPLETED';
     case 'LITIGE_REPORTED':
-    case 'LITIGE_VALIDATED':
       return 'LITIGE';
+    // Litige reason accepted by the orienteur (RDV, GC…): on hold until sent back
+    case 'LITIGE_VALIDATED':
+      return 'SUSPENDED';
     case 'LITIGE_REOPENED':
       return 'REOPENED';
     case 'ASSIGNED':
@@ -213,6 +215,7 @@ export function computeSumCheck(tickets: Ticket[]): SumCheckResult {
   let reopened = 0;
   let completed = 0;
   let litige = 0;
+  let suspended = 0;
 
   const culpritTickets: { id: string; ticketNumber: string; reason: string }[] = [];
 
@@ -237,6 +240,9 @@ export function computeSumCheck(tickets: Ticket[]): SumCheckResult {
       case 'LITIGE':
         litige++;
         break;
+      case 'SUSPENDED':
+        suspended++;
+        break;
       default:
         culpritTickets.push({
           id: t.id,
@@ -246,7 +252,7 @@ export function computeSumCheck(tickets: Ticket[]): SumCheckResult {
     }
   });
 
-  const sumOfCategories = toAssign + zoneToMap + assigned + reopened + completed + litige;
+  const sumOfCategories = toAssign + zoneToMap + assigned + reopened + completed + litige + suspended;
   const isBalanced = sumOfCategories === totalTickets;
   const discrepancy = totalTickets - sumOfCategories;
 
@@ -262,6 +268,7 @@ export function computeSumCheck(tickets: Ticket[]): SumCheckResult {
       reopened,
       completed,
       litige,
+      suspended,
     },
     culpritTickets,
   };

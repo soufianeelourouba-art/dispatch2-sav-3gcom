@@ -4,7 +4,7 @@ import { store } from '../../services/storage';
 import { formatCasablancaDateTime, formatCasablancaTimeOnly, formatSLADisplay } from '../../domain/format';
 import { exportTicketsToExcel } from '../../services/excelExporter';
 import { LitigeResolutionModal } from './LitigeResolutionModal';
-import { SplitterBadge, ManualTicketBadge, NfSummary } from '../tickets/TicketBadges';
+import { SplitterBadge, ManualTicketBadge, NfSummary, SuspendedNotice } from '../tickets/TicketBadges';
 import { SplitterIncidentsPanel } from '../tickets/SplitterIncidentsPanel';
 import { splitterKey, groupBySplitter } from '../../domain/splitter';
 import { 
@@ -517,11 +517,13 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                       ticket.currentStatus === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' :
                       ticket.currentStatus === 'LITIGE' ? 'bg-rose-100 text-rose-800' :
                       ticket.currentStatus === 'REOPENED' ? 'bg-blue-100 text-blue-800' :
+                      ticket.currentStatus === 'SUSPENDED' ? 'bg-slate-200 text-slate-800' :
                       'bg-slate-100 text-slate-800'
                     }`}>
                       {ticket.currentStatus === 'COMPLETED' ? '✓ NF (Normalisé)' :
                        ticket.currentStatus === 'LITIGE' ? '⚠️ Litige Signalé' :
                        ticket.currentStatus === 'REOPENED' ? '🔄 Réouvert (En cours)' :
+                       ticket.currentStatus === 'SUSPENDED' ? '⏸ Suspendu' :
                        'Transmis'}
                     </span>
 
@@ -534,6 +536,7 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                   )}
 
                   <NfSummary ticket={ticket} onOpen={() => onOpenTicketHistory(ticket)} />
+                  <SuspendedNotice ticket={ticket} onRelaunch={() => setLitigeModalTicket(ticket)} />
 
                   <div className="text-xs">
                     <span className="font-bold text-slate-900 text-sm">{ticket.clientName}</span>

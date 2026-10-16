@@ -17,7 +17,9 @@ globalThis.fetch = (async (input: any, init?: any) => {
 }) as typeof fetch;
 
 const { POST: webhook } = await import('../api/telegram-webhook.ts');
-const { POST: portal } = await import('../api/portal.ts');
+const { POST: portal, GET: portalGetHandler } = await import('../api/portal.ts');
+const { openTicketsOf } = await import('../api/_lib/tickets.ts');
+const { applyEventToTicket } = await import('../src/domain/tickets.ts');
 const { webhookSecret } = await import('../api/_lib/webhookSecret.ts');
 const { rdvDayOptions, RDV_SLOTS } = await import('../src/domain/litiges.ts');
 const { LITIGE_REASONS } = await import('../src/types/index.ts');
@@ -39,6 +41,7 @@ const update = (body: any) => webhook(new Request('https://test.local/api/telegr
 }));
 const press = (data: string) => update({ callback_query: { id: 'cb', data, from: { id: CHAT }, message: { chat: { id: CHAT }, message_id: 42 } } });
 const say = (text: string) => update({ message: { chat: { id: CHAT }, from: { id: CHAT }, text } });
+const portalGet = () => portalGetHandler(new Request(`https://test.local/api/portal?token=${TOKEN}`));
 const read = async (n: number) => (await db.doc(`tickets/${tid(n)}`).get()).data()!;
 const lastKeyboard = () => [...telegramCalls].reverse().find(c => c.method === 'editMessageReplyMarkup')?.body.reply_markup.inline_keyboard.flat() || [];
 
@@ -97,6 +100,26 @@ try {
   const t4 = await read(4);
   check('Motif « autre » avec commentaire', t4.currentStatus === 'LITIGE' && t4.lastLitigeNotes === 'Portail fermé, syndic absent', t4);
   check('Les boutons du ticket sont retirés', telegramCalls.some(c => c.method === 'editMessageReplyMarkup' && c.body.reply_markup.inline_keyboard.length === 0));
+
+  // 4b. Orienteur validates the RDV litige → suspended, out of the technician's list
+  const orienteurEvent = async (n: number, eventType: 'LITIGE_VALIDATED' | 'LITIGE_REOPENED') => {
+    const ticket = { ...(await read(n)), id: tid(n) } as any;
+    const events = (await db.collection('events').where('ticketId', '==', tid(n)).get()).docs.map(d => d.data()) as any[];
+    const evt = { id: `evt-${ID}-${eventType}-${n}`, ticketId: tid(n), sectorId: SECTOR, eventType, actorRole: 'DISPATCHER', actorName: 'Orienteur Test', technicianId: TECH, createdAt: new Date().toISOString() };
+    await db.doc(`events/${evt.id}`).set(evt);
+    await db.doc(`tickets/${tid(n)}`).set(applyEventToTicket(ticket, evt as any, [...events, evt]));
+  };
+  await orienteurEvent(1, 'LITIGE_VALIDATED');
+  check('Motif validé → ticket « Suspendu »', (await read(1)).currentStatus === 'SUSPENDED', (await read(1)).currentStatus);
+  check('Suspendu : absent des interventions du technicien (/tickets)', !(await openTicketsOf(TECH)).some(t => t.id === tid(1)));
+  const callsBeforeOld = telegramCalls.length;
+  await press(`nfs:${tid(1)}`);
+  check('Suspendu : un ancien bouton NF est refusé', (await read(1)).currentStatus === 'SUSPENDED'
+    && telegramCalls.slice(callsBeforeOld).some(c => c.method === 'sendMessage' && /suspendu/.test(c.body.text)));
+  const app = await (await portalGet()).json() as any;
+  check('Suspendu : visible dans « En attente » de l\'app technicien', app.onHold?.some((t: any) => t.id === tid(1) && t.lastLitigeRdvDate), app.onHold);
+  await orienteurEvent(1, 'LITIGE_REOPENED');
+  check('Relance → le ticket revient chez le technicien', (await read(1)).currentStatus === 'REOPENED' && (await openTicketsOf(TECH)).some(t => t.id === tid(1)));
 
   // 5. Technician app: RDV without a date is refused
   const res = await portal(new Request('https://test.local/api/portal', {

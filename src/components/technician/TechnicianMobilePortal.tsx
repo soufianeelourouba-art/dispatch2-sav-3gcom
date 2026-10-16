@@ -19,6 +19,8 @@ interface PortalTicket extends FormTicket {
   manualNature?: string;
   description?: string;
   reopenedWithNewPhone?: string;
+  lastLitigeReasonLabel?: string;
+  lastLitigeRdvDate?: string;
   lastDispatcherUpdateNotes?: string;
   closedAt?: string;
   prestation?: Omit<PrestationDeclaration, 'photoIds'> & { photoCount: number };
@@ -30,6 +32,7 @@ interface PortalData {
   tickets: PortalTicket[];
   toDeclare: PortalTicket[];
   declared: PortalTicket[];
+  onHold?: PortalTicket[];
 }
 
 type Tab = 'todo' | 'declare' | 'done';
@@ -253,6 +256,26 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({ 
               </div>
             )}
           />
+        )}
+
+        {/* Litiges accepted by the orienteur: kept for reference, back in "À faire" when relaunched */}
+        {screen.kind === 'list' && tab === 'todo' && (data.onHold?.length || 0) > 0 && (
+          <div className="mt-5 space-y-2">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500 px-1">
+              ⏸ En attente ({data.onHold!.length}) · suspendus par l'orienteur
+            </div>
+            {data.onHold!.map(t => (
+              <div key={t.id} className="bg-slate-100 border border-slate-200 rounded-2xl p-3 text-sm text-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono font-bold text-slate-900">{t.ticketNumber}</span>
+                  <span className="text-[11px] font-semibold bg-slate-200 rounded-full px-2 py-0.5">{t.lastLitigeReasonLabel || 'Litige'}</span>
+                </div>
+                <div>{t.clientName}</div>
+                {t.lastLitigeRdvDate && <div className="font-semibold text-slate-900">📅 RDV le {formatCasablancaDateTime(t.lastLitigeRdvDate)}</div>}
+                <div className="text-[11px] text-slate-500 mt-1">Il reviendra dans « À faire » quand l'orienteur le relancera.</div>
+              </div>
+            ))}
+          </div>
         )}
 
         {screen.kind === 'list' && tab === 'declare' && (

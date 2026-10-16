@@ -69,3 +69,13 @@ describe('numéros de téléphone', () => {
     expect(formatPhonesIntl('212522525236/212666274849')).toBe('+212 522 52 52 36 / +212 666 27 48 49');
   });
 });
+
+describe('rdvProximity', () => {
+  it('situe le RDV par rapport à aujourd\'hui', async () => {
+    const { rdvProximity } = await import('./litiges');
+    expect(rdvProximity('2026-10-15T14:00:00Z', NOW)).toBe('PAST');
+    expect(rdvProximity('2026-10-16T08:00:00Z', NOW)).toBe('TODAY'); // même jour, déjà passé dans la journée
+    expect(rdvProximity('2026-10-17T14:00:00Z', NOW)).toBe('TOMORROW');
+    expect(rdvProximity('2026-10-25T14:00:00Z', NOW)).toBe('LATER');
+  });
+});

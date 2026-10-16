@@ -40,6 +40,7 @@ const forTechnician = (t: Ticket) => ({
   visitCount: t.visitCount,
   currentStatus: t.currentStatus,
   lastLitigeReasonLabel: t.lastLitigeReasonLabel,
+  lastLitigeRdvDate: t.lastLitigeRdvDate,
   lastDispatcherUpdateNotes: t.lastDispatcherUpdateNotes,
   reopenedWithNewPhone: t.reopenedWithNewPhone,
   splitterRef: t.splitterRef,
@@ -59,7 +60,7 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const tech = await technicianFrom(new URL(request.url).searchParams.get('token'));
     if (technicianIsBlocked(tech)) {
-      return json({ technician: { fullName: tech.fullName }, suspended: true, tickets: [], toDeclare: [], declared: [] });
+      return json({ technician: { fullName: tech.fullName }, suspended: true, tickets: [], toDeclare: [], declared: [], onHold: [] });
     }
     const [open, prestations] = await Promise.all([openTicketsOf(tech.id), technicianPrestations(tech.id)]);
     return json({
@@ -67,6 +68,7 @@ export async function GET(request: Request): Promise<Response> {
       suspended: false,
       tickets: open.map(forTechnician),
       toDeclare: prestations.toDeclare.map(forTechnician),
+      onHold: prestations.onHold.map(forTechnician),
       declared: prestations.declared.map(forTechnician),
     });
   } catch (err) {

@@ -85,3 +85,15 @@ export function formatPhoneIntl(raw: string): string {
 export function formatPhonesIntl(raw: string): string {
   return raw.split(/[\/,;]| - /).map(p => p.trim()).filter(Boolean).map(formatPhoneIntl).join(' / ');
 }
+
+// Where a RDV stands compared with today (Morocco calendar days)
+export type RdvProximity = 'PAST' | 'TODAY' | 'TOMORROW' | 'LATER';
+
+export function rdvProximity(iso: string, now = new Date()): RdvProximity {
+  const day = dayCode(new Date(iso));
+  const today = dayCode(now);
+  if (day < today) return 'PAST';
+  if (day === today) return 'TODAY';
+  if (day === dayCode(new Date(now.getTime() + 86400_000))) return 'TOMORROW';
+  return 'LATER';
+}

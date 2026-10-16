@@ -84,6 +84,7 @@ export type TicketStatus =
   | 'ASSIGNED'           // Validé par l'orienteur, transmis au technicien sur Telegram
   | 'COMPLETED'          // NF : Normalisé / Terminé avec succès (Fibre rétablie)
   | 'LITIGE'             // Litige / LC déclaré par le technicien sur le terrain
+  | 'SUSPENDED'          // Motif du litige validé par l'orienteur (RDV, GC…) : en attente de relance
   | 'REOPENED';          // Litige renvoyé au technicien avec informations mises à jour
 
 // Motifs de Litige terrain (§2)
@@ -295,6 +296,7 @@ export interface SumCheckResult {
     reopened: number;
     completed: number;
     litige: number;
+    suspended: number;
   };
   culpritTickets: { id: string; ticketNumber: string; reason: string }[];
 }

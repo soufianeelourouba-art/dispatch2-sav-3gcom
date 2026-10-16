@@ -219,7 +219,7 @@ function renderEventTitle(type: string): string {
     case 'NF_SUBMITTED': return '🟢 Normalisé (NF) validé';
     case 'LITIGE_REPORTED': return '🔴 Litige Client (LC) déclaré';
     case 'LITIGE_REOPENED': return '🔄 Litige réouvert avec mise à jour';
-    case 'LITIGE_VALIDATED': return '✓ Motif de litige validé par l\'orienteur';
+    case 'LITIGE_VALIDATED': return '⏸ Motif validé par l\'orienteur — ticket suspendu';
     default: return type;
   }
 }

@@ -74,7 +74,8 @@ describe('reduceTicketStatus', () => {
     [['IMPORT', 'ASSIGNED', 'TELEGRAM_SENT'], 'ASSIGNED'],
     [['IMPORT', 'ASSIGNED', 'NF_SUBMITTED'], 'COMPLETED'],
     [['IMPORT', 'ASSIGNED', 'LITIGE_REPORTED'], 'LITIGE'],
-    [['IMPORT', 'ASSIGNED', 'LITIGE_REPORTED', 'LITIGE_VALIDATED'], 'LITIGE'],
+    [['IMPORT', 'ASSIGNED', 'LITIGE_REPORTED', 'LITIGE_VALIDATED'], 'SUSPENDED'],
+    [['IMPORT', 'ASSIGNED', 'LITIGE_REPORTED', 'LITIGE_VALIDATED', 'LITIGE_REOPENED'], 'REOPENED'],
     [['IMPORT', 'ASSIGNED', 'LITIGE_REPORTED', 'LITIGE_REOPENED'], 'REOPENED'],
     [['IMPORT', 'ASSIGNED', 'LITIGE_REPORTED', 'LITIGE_REOPENED', 'REASSIGNED'], 'ASSIGNED'],
   ];
@@ -156,14 +157,14 @@ describe('applyEventToTicket', () => {
 
 describe('computeSumCheck', () => {
   it('chaque ticket est compté dans une seule catégorie', () => {
-    const statuses: TicketStatus[] = ['TO_ASSIGN', 'PROPOSED', 'ZONE_TO_MAP', 'ASSIGNED', 'REOPENED', 'COMPLETED', 'LITIGE', 'LITIGE'];
+    const statuses: TicketStatus[] = ['TO_ASSIGN', 'PROPOSED', 'ZONE_TO_MAP', 'ASSIGNED', 'REOPENED', 'COMPLETED', 'LITIGE', 'LITIGE', 'SUSPENDED'];
     const result = computeSumCheck(statuses.map((s, i) => ticket({ id: `t${i}`, currentStatus: s })));
     expect(result).toMatchObject({
-      totalTickets: 8,
-      sumOfCategories: 8,
+      totalTickets: 9,
+      sumOfCategories: 9,
       isBalanced: true,
       discrepancy: 0,
-      breakdown: { toAssign: 2, zoneToMap: 1, assigned: 1, reopened: 1, completed: 1, litige: 2 },
+      breakdown: { toAssign: 2, zoneToMap: 1, assigned: 1, reopened: 1, completed: 1, litige: 2, suspended: 1 },
     });
   });
 

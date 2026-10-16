@@ -6,7 +6,7 @@ import { calculateDispatchProposals } from '../../services/dispatchEngine';
 import { telegramGateway } from '../../services/telegramSimulator';
 import { LitigeResolutionModal } from './LitigeResolutionModal';
 import { ManualTicketModal } from '../tickets/ManualTicketModal';
-import { SplitterBadge, ManualTicketBadge, NfSummary } from '../tickets/TicketBadges';
+import { SplitterBadge, ManualTicketBadge, NfSummary, SuspendedNotice } from '../tickets/TicketBadges';
 import { SplitterIncidentsPanel } from '../tickets/SplitterIncidentsPanel';
 import { splitterKey, groupBySplitter } from '../../domain/splitter';
 import { 
@@ -47,7 +47,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
   const userSectors = store.getSectors(currentUser);
   const [selectedSectorId, setSelectedSectorId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewScope, setViewScope] = useState<'PENDING_DISPATCH' | 'ALREADY_SENT' | 'ALL'>('PENDING_DISPATCH');
+  const [viewScope, setViewScope] = useState<'PENDING_DISPATCH' | 'ALREADY_SENT' | 'SUSPENDED' | 'ALL'>('PENDING_DISPATCH');
   const [activeSlaFilter, setActiveSlaFilter] = useState<'ALL' | 'OVERDUE' | 'CRITICAL' | 'LITIGES' | 'SPLITTER'>('ALL');
   const [splitterFilter, setSplitterFilter] = useState<string | null>(null);
   const [isManualTicketOpen, setIsManualTicketOpen] = useState(false);
@@ -151,15 +151,25 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
     setSelectedTechChanges(updates);
   };
 
+  // Litiges accepted by the orienteur, waiting to be sent back (earliest RDV first)
+  const suspendedTickets = useMemo(
+    () => tickets
+      .filter(t => t.currentStatus === 'SUSPENDED')
+      .sort((a, b) => (a.lastLitigeRdvDate || '9999').localeCompare(b.lastLitigeRdvDate || '9999')),
+    [tickets]
+  );
+
   // Base list depending on view scope
   const baseList = useMemo(() => {
     if (viewScope === 'PENDING_DISPATCH') {
       return dispatchableTickets;
     } else if (viewScope === 'ALREADY_SENT') {
       return alreadySentTickets;
+    } else if (viewScope === 'SUSPENDED') {
+      return suspendedTickets;
     }
     return tickets;
-  }, [viewScope, dispatchableTickets, alreadySentTickets, tickets]);
+  }, [viewScope, dispatchableTickets, alreadySentTickets, suspendedTickets, tickets]);
 
   // Filtered tickets
   const displayedTickets = useMemo(() => {
@@ -469,6 +479,14 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
             Déjà transmis au terrain ({alreadySentTickets.length})
           </button>
           <button
+            onClick={() => setViewScope('SUSPENDED')}
+            className={`px-3.5 py-1.5 rounded-lg transition-all ${
+              viewScope === 'SUSPENDED' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            ⏸ Suspendus ({suspendedTickets.length})
+          </button>
+          <button
             onClick={() => setViewScope('ALL')}
             className={`px-3.5 py-1.5 rounded-lg transition-all ${
               viewScope === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -635,12 +653,14 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
                         ticket.currentStatus === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' :
                         ticket.currentStatus === 'LITIGE' ? 'bg-rose-100 text-rose-800' :
                         ticket.currentStatus === 'REOPENED' ? 'bg-blue-100 text-blue-800' :
+                        ticket.currentStatus === 'SUSPENDED' ? 'bg-slate-200 text-slate-800' :
                         ticket.currentStatus === 'ASSIGNED' ? 'bg-slate-100 text-slate-800' :
                         'bg-slate-100 text-slate-600'
                       }`}>
                         {ticket.currentStatus === 'COMPLETED' ? '✓ NF (Normalisé)' :
                          ticket.currentStatus === 'LITIGE' ? '⚠️ Litige Client' :
                          ticket.currentStatus === 'REOPENED' ? '🔄 Réouvert mise à jour' :
+                         ticket.currentStatus === 'SUSPENDED' ? '⏸ Suspendu' :
                          ticket.currentStatus === 'ASSIGNED' ? 'Transmis au technicien' :
                          'En attente dispatch'}
                       </span>
@@ -654,6 +674,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
                     )}
 
                     <NfSummary ticket={ticket} onOpen={() => onOpenTicketHistory(ticket)} />
+                    <SuspendedNotice ticket={ticket} onRelaunch={() => setLitigeModalTicket(ticket)} />
 
                     <div className="text-xs space-y-0.5">
                       <div className="font-bold text-slate-900 text-sm">

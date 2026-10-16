@@ -2,6 +2,8 @@ import React from 'react';
 import { Ticket, MANUAL_TICKET_NATURES } from '../../types';
 import { Cable, Wrench } from 'lucide-react';
 import { describeMaterials, hasMaterials, prestationLabel } from '../../domain/prestations';
+import { rdvProximity } from '../../domain/litiges';
+import { formatCasablancaDateTime } from '../../domain/format';
 
 // "Splitter SP-12 · 4 tickets": highlighted when several open tickets share the splitter.
 export const SplitterBadge: React.FC<{ ticket: Ticket; groupSize?: number }> = ({ ticket, groupSize = 1 }) => {
@@ -46,6 +48,35 @@ export const NfSummary: React.FC<{ ticket: Ticket; onOpen?: () => void }> = ({ t
       <span>Prestation : {prestation}</span>
       {photos > 0 && <span className="text-slate-700">📷 {photos} photo{photos > 1 ? 's' : ''}</span>}
     </button>
+  );
+};
+
+// Litige accepted by the orienteur: on hold, with the RDV (highlighted when due) and "Relancer".
+export const SuspendedNotice: React.FC<{ ticket: Ticket; onRelaunch: () => void }> = ({ ticket, onRelaunch }) => {
+  if (ticket.currentStatus !== 'SUSPENDED') return null;
+  const proximity = ticket.lastLitigeRdvDate ? rdvProximity(ticket.lastLitigeRdvDate) : null;
+  const rdvStyle =
+    proximity === 'PAST' ? 'bg-rose-100 text-rose-800' :
+    proximity === 'TODAY' ? 'bg-amber-200 text-amber-900' :
+    proximity === 'TOMORROW' ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700';
+  const rdvLabel =
+    proximity === 'PAST' ? 'RDV dépassé' :
+    proximity === 'TODAY' ? 'RDV aujourd\'hui' :
+    proximity === 'TOMORROW' ? 'RDV demain' : 'RDV';
+  return (
+    <div className="bg-slate-100 border border-slate-300 p-2.5 rounded-xl text-xs text-slate-800 flex flex-wrap items-center justify-between gap-2">
+      <div className="space-y-0.5">
+        <div><b>⏸ Suspendu</b> · motif validé : {ticket.lastLitigeReasonLabel || 'Litige'}</div>
+        {ticket.lastLitigeRdvDate && (
+          <span className={`inline-block font-semibold px-1.5 py-0.5 rounded ${rdvStyle}`}>
+            📅 {rdvLabel} : {formatCasablancaDateTime(ticket.lastLitigeRdvDate)}
+          </span>
+        )}
+      </div>
+      <button onClick={onRelaunch} className="px-3 py-1.5 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shrink-0">
+        🔄 Relancer
+      </button>
+    </div>
   );
 };
 

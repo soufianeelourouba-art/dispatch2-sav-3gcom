@@ -29,12 +29,15 @@ export function technicianIsBlocked(tech: Technician): boolean {
   return !tech.isActive || !!tech.telegramLinkDisabled || tech.telegramActivationStatus === 'REVOKED';
 }
 
+// Tickets the technician has to work on (suspended litiges are on hold, not to do)
 export async function openTicketsOf(techId: string): Promise<Ticket[]> {
   const snap = await adminDb().collection('tickets')
     .where('currentAssignedTechId', '==', techId)
     .where('isClosed', '==', false)
     .get();
-  return snap.docs.map(d => ({ ...(d.data() as Ticket), id: d.id }));
+  return snap.docs
+    .map(d => ({ ...(d.data() as Ticket), id: d.id }))
+    .filter(t => t.currentStatus !== 'SUSPENDED');
 }
 
 export type TechnicianReport =
@@ -59,6 +62,7 @@ export async function recordTechnicianReport(
     const ticket = { ...(ticketSnap.data() as Ticket), id: ticketSnap.id };
     if (ticket.currentAssignedTechId !== tech.id) throw new AccessError('Ce ticket ne vous est plus affecté.');
     if (ticket.isClosed) throw new AccessError('Ce ticket est déjà clôturé.');
+    if (ticket.currentStatus === 'SUSPENDED') throw new AccessError('Ce ticket est suspendu par l’orienteur : attendez sa relance.');
 
     const eventsSnap = await tx.get(db.collection('events').where('ticketId', '==', ticketId));
     const events = eventsSnap.docs.map(d => d.data() as TicketEvent);

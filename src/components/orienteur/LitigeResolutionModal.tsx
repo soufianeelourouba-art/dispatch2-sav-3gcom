@@ -34,6 +34,7 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
   const [validationNotes, setValidationNotes] = useState('');
 
   if (!ticket) return null;
+  const isSuspended = ticket.currentStatus === 'SUSPENDED';
 
   const handleReopen = (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +86,7 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">
-                Traitement du Litige Terrain · {ticket.ticketNumber}
+                {isSuspended ? 'Relancer le ticket suspendu' : 'Traitement du Litige Terrain'} · {ticket.ticketNumber}
               </h2>
               <p className="text-xs text-rose-800 font-medium mt-0.5">
                 Déclaré par {ticket.lastVisitedTechName || 'Le technicien'}
@@ -152,7 +153,7 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
               <span>Renvoyer avec mise à jour</span>
             </button>
 
-            <button
+            {!isSuspended && <button
               onClick={() => setActiveAction('VALIDATE')}
               className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                 activeAction === 'VALIDATE'
@@ -161,12 +162,12 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
               }`}
             >
               <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Valider le motif du technicien</span>
-            </button>
+              <span>Valider le motif (suspendre)</span>
+            </button>}
           </div>
 
           {/* Form 1: Reopen with update (§2) */}
-          {activeAction === 'REOPEN' && (
+          {(activeAction === 'REOPEN' || isSuspended) && (
             <form onSubmit={handleReopen} className="space-y-3 text-xs">
               <div>
                 <label className="text-[11px] font-semibold text-slate-700 block mb-1">
@@ -222,10 +223,10 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
           )}
 
           {/* Form 2: Validate technician reason (§2) */}
-          {activeAction === 'VALIDATE' && (
+          {activeAction === 'VALIDATE' && !isSuspended && (
             <form onSubmit={handleValidate} className="space-y-3 text-xs">
               <p className="text-slate-600 text-xs">
-                Vous confirmez que le motif du technicien ({ticket.lastLitigeReasonLabel}) est exact. Le dossier sera orienté vers l'équipe Génie Civil, replanifié selon le RDV ou escaladé à Maroc Telecom.
+                Vous confirmez le motif du technicien ({ticket.lastLitigeReasonLabel}). Le ticket passe en <b>⏸ Suspendu</b> : il sort des litiges et de la liste du technicien, et vous le relancerez depuis l'onglet « Suspendus » (par exemple le jour du RDV).
               </p>
 
               <div>
