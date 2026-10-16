@@ -1,14 +1,14 @@
 // What happens in the technician's Telegram chat after an NF / litige / declaration, whatever
-// the channel used (bot buttons, technician app, form): the buttons of the ticket's messages
-// become a status, and after an NF the bot offers "Déclarer la prestation" (unless done).
+// the channel used (bot buttons, technician app, form): the buttons of the ticket's messages are
+// removed, and after an NF the bot offers "Déclarer la prestation" (unless done).
 import { sendMessage } from './telegram.js';
-import { settleMessages, STATUS_LABELS, trackMessage } from './telegramMessages.js';
+import { removeButtons, trackMessage } from './telegramMessages.js';
 import { declareButton } from './miniapp.js';
 import type { Technician, Ticket } from '../../src/types/index.js';
 
 export async function afterTechnicianReport(base: string, tech: Technician, tickets: Ticket[], kind: 'NF' | 'LITIGE') {
   if (tickets.length === 0) return;
-  await settleMessages(tickets.map(t => t.id), STATUS_LABELS[kind]);
+  await removeButtons(tickets.map(t => t.id));
   if (kind !== 'NF' || !tech.telegramChatId) return;
 
   const lead = tickets[0];
@@ -18,7 +18,7 @@ export async function afterTechnicianReport(base: string, tech: Technician, tick
   const nf = lead.nfType === 'CENTRAL_CONFIG' ? `NF config centrale (ONT ${lead.ontSerialNumber})` : 'NF';
 
   if (lead.prestationStatus === 'DECLAREE') {
-    await settleMessages([lead.id], STATUS_LABELS.DECLARED, 'declare');
+    await removeButtons([lead.id], 'declare');
     await sendMessage(tech.telegramChatId, `🟢 <b>${nf} enregistrée</b> pour ${what}, prestation déclarée. Merci !`);
     return;
   }
@@ -33,5 +33,5 @@ export async function afterTechnicianReport(base: string, tech: Technician, tick
 }
 
 export async function afterDeclaration(ticketId: string) {
-  await settleMessages([ticketId], STATUS_LABELS.DECLARED, 'declare');
+  await removeButtons([ticketId], 'declare');
 }
