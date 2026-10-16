@@ -112,7 +112,7 @@ export function applyEventToTicket(ticket: Ticket, newEvent: TicketEvent, allTic
   }
 
   // The orienteur has handled the litige: no pending number request anymore
-  if (newEvent.eventType === 'LITIGE_REOPENED' || newEvent.eventType === 'LITIGE_VALIDATED') {
+  if (newEvent.eventType === 'LITIGE_REOPENED' || newEvent.eventType === 'LITIGE_VALIDATED' || newEvent.eventType === 'REASSIGNED') {
     updatedTicket.lastLitigeNeedsContact = false;
   }
 

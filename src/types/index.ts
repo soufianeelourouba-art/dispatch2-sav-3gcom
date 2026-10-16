@@ -93,7 +93,8 @@ export type LitigeReasonCode =
   | 'CLIENT_UNREACHABLE' // Client injoignable
   | 'RDV'                // RDV (avec date et heure)
   | 'GC'                 // GC (Génie civil : fourreau bouché, chambre inaccessible)
-  | 'AUTRE';             // Autre motif
+  | 'AUTRE'              // Autre motif
+  | 'HORS_ZONE';         // Ticket hors de la zone du technicien (mauvaise affectation)
 
 export interface LitigeDef {
   code: LitigeReasonCode;
@@ -125,6 +126,12 @@ export const LITIGE_REASONS: LitigeDef[] = [
     code: 'AUTRE',
     label: 'Autre motif',
     description: 'Refus client, problème syndic, incident imprévu sur site.',
+    category: 'EXTERNAL',
+  },
+  {
+    code: 'HORS_ZONE',
+    label: '📍 Hors de ma zone',
+    description: 'Le ticket n\'est pas dans la zone du technicien : l\'orienteur doit le réaffecter.',
     category: 'EXTERNAL',
   },
 ];

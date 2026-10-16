@@ -161,12 +161,6 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
     exportTicketsToExcel(filteredTickets, `suivi_interventions_${currentUser.sectorId || 'secteur'}.xlsx`);
   };
 
-  const handlePingTechnician = (ticket: Ticket) => {
-    if (!ticket.currentAssignedTechId) return;
-    const tech = technicians.find(t => t.id === ticket.currentAssignedTechId);
-    setAlertSuccessMsg(`Relance prioritaire envoyée à ${tech?.fullName || 'technicien'} pour le ticket ${ticket.ticketNumber} !`);
-    setTimeout(() => setAlertSuccessMsg(null), 4000);
-  };
 
   return (
     <div className="space-y-6">
@@ -559,12 +553,6 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                           DÉPASSEMENT CRITIQUE HD : Dépassé de <b>{Math.abs(ticket.slaRemainingHours)}h</b> par rapport aux 24h contractuelles. Pénalités applicables.
                         </span>
                       </div>
-                      <button
-                        onClick={() => handlePingTechnician(ticket)}
-                        className="px-2.5 py-1 text-[11px] font-bold bg-rose-700 hover:bg-rose-800 text-white rounded-lg transition-colors shrink-0 shadow-2xs"
-                      >
-                        ⚡ Relancer technicien
-                      </button>
                     </div>
                   )}
 

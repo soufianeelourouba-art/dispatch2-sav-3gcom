@@ -121,6 +121,28 @@ try {
   await orienteurEvent(1, 'LITIGE_REOPENED');
   check('Relance → le ticket revient chez le technicien', (await read(1)).currentStatus === 'REOPENED' && (await openTicketsOf(TECH)).some(t => t.id === tid(1)));
 
+  // 4c. Wrong zone: litige "Hors de ma zone", then the orienteur reassigns to another technician
+  await press(`lit:${tid(2)}`);
+  check('Motif « Hors de ma zone » proposé', lastKeyboard().some((b: any) => b.callback_data === `lr:${reasonIndex('HORS_ZONE')}:${tid(2)}`));
+  await orienteurEvent(2, 'LITIGE_REOPENED'); // reset the earlier litige of ticket 2
+  await press(`lr:${reasonIndex('HORS_ZONE')}:${tid(2)}`);
+  check('Litige « hors zone » enregistré', (await read(2)).lastLitigeReasonCode === 'HORS_ZONE' && (await read(2)).currentStatus === 'LITIGE');
+  const OTHER = `${TECH}-autre`;
+  await db.doc(`technicians/${OTHER}`).set({ id: OTHER, sectorId: SECTOR, sectorIds: [SECTOR], fullName: 'Autre Technicien', normalizedName: 'autre technicien', phone: '', zoneIds: [], isActive: true, createdAt: now });
+  {
+    const t = { ...(await read(2)), id: tid(2) } as any;
+    const events = (await db.collection('events').where('ticketId', '==', tid(2)).get()).docs.map(d => d.data()) as any[];
+    const evt = { id: `evt-${ID}-reassign`, ticketId: tid(2), sectorId: SECTOR, eventType: 'REASSIGNED', actorRole: 'DISPATCHER', actorName: 'Orienteur Test', technicianId: OTHER, technicianName: 'Autre Technicien', createdAt: new Date().toISOString() };
+    await db.doc(`events/${evt.id}`).set(evt);
+    await db.doc(`tickets/${tid(2)}`).set(applyEventToTicket(t, evt as any, [...events, evt]));
+  }
+  const t2r = await read(2);
+  check('Réaffecté : transmis au nouveau technicien', t2r.currentStatus === 'ASSIGNED' && t2r.currentAssignedTechId === OTHER, t2r.currentStatus);
+  check('Réaffecté : sorti des interventions de l\'ancien technicien', !(await openTicketsOf(TECH)).some(t => t.id === tid(2)) && (await openTicketsOf(OTHER)).some(t => t.id === tid(2)));
+  await press(`nfs:${tid(2)}`);
+  check('Ancien technicien : un ancien bouton est refusé', (await read(2)).currentStatus === 'ASSIGNED');
+  await db.doc(`technicians/${OTHER}`).delete();
+
   // 5. Technician app: RDV without a date is refused
   const res = await portal(new Request('https://test.local/api/portal', {
     method: 'POST',

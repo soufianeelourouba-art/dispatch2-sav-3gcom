@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Ticket } from '../../types';
 import { store } from '../../services/storage';
 import { formatCasablancaDateTime } from '../../domain/format';
@@ -11,7 +11,8 @@ import {
   MapPin, 
   Calendar, 
   Send,
-  MessageSquare
+  MessageSquare,
+  UserCog
 } from 'lucide-react';
 
 interface LitigeResolutionModalProps {
@@ -27,7 +28,17 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [activeAction, setActiveAction] = useState<'REOPEN' | 'VALIDATE'>('REOPEN');
+  const [activeAction, setActiveAction] = useState<'REOPEN' | 'VALIDATE' | 'REASSIGN'>('REOPEN');
+  const [newTechId, setNewTechId] = useState('');
+  const [reassignNote, setReassignNote] = useState('');
+
+  // "Hors de ma zone" → reassignment is the expected answer
+  useEffect(() => {
+    if (!ticket) return;
+    setActiveAction(ticket.lastLitigeReasonCode === 'HORS_ZONE' ? 'REASSIGN' : 'REOPEN');
+    setNewTechId('');
+    setReassignNote('');
+  }, [ticket?.id]);
   // Empty = number unchanged (the current one is shown as placeholder)
   const [newPhone, setNewPhone] = useState('');
   const [dispatcherNotes, setDispatcherNotes] = useState('');
@@ -56,6 +67,27 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
     setNewPhone('');
     setDispatcherNotes('');
 
+    onSuccess();
+    onClose();
+  };
+
+  // Other technicians of the ticket's sector, those covering its zone first
+  const candidates = store.getTechnicians()
+    .filter(t => t.isActive && t.id !== ticket.currentAssignedTechId
+      && (t.sectorId === ticket.sectorId || (t.sectorIds || []).includes(ticket.sectorId || '')))
+    .sort((a, b) =>
+      Number(b.zoneIds.includes(ticket.technicalZoneId || '')) - Number(a.zoneIds.includes(ticket.technicalZoneId || ''))
+      || a.fullName.localeCompare(b.fullName));
+
+  const handleReassign = (e: React.FormEvent) => {
+    e.preventDefault();
+    const tech = candidates.find(t => t.id === newTechId);
+    if (!tech) {
+      alert('Choisissez le technicien à qui confier le ticket.');
+      return;
+    }
+    store.reassignTicket(ticket.id, tech.id, tech.fullName, actorName,
+      reassignNote.trim() || `Réaffecté suite au litige « ${ticket.lastLitigeReasonLabel || 'litige'} »`);
     onSuccess();
     onClose();
   };
@@ -154,6 +186,18 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
             </button>
 
             {!isSuspended && <button
+              onClick={() => setActiveAction('REASSIGN')}
+              className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                activeAction === 'REASSIGN'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <UserCog className="w-3.5 h-3.5 text-violet-600" />
+              <span>Réaffecter</span>
+            </button>}
+
+            {!isSuspended && <button
               onClick={() => setActiveAction('VALIDATE')}
               className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                 activeAction === 'VALIDATE'
@@ -167,6 +211,47 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
           </div>
 
           {/* Form 1: Reopen with update (§2) */}
+          {/* Form: reassign to another technician (wrong zone…) */}
+          {activeAction === 'REASSIGN' && !isSuspended && (
+            <form onSubmit={handleReassign} className="space-y-3 text-xs">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">Nouveau technicien :</label>
+                <select
+                  value={newTechId}
+                  onChange={e => setNewTechId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900"
+                >
+                  <option value="">— Choisir un technicien —</option>
+                  {candidates.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.fullName}{t.zoneIds.includes(ticket.technicalZoneId || '') ? ' (couvre la zone)' : ''}{t.telegramChatId ? '' : ' — Telegram non activé'}
+                    </option>
+                  ))}
+                </select>
+                {candidates.length === 0 && <p className="text-amber-700 mt-1">Aucun autre technicien actif dans ce secteur.</p>}
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 block mb-1">Note (facultative) :</label>
+                <input
+                  value={reassignNote}
+                  onChange={e => setReassignNote(e.target.value)}
+                  placeholder="ex : zone Californie, pas Inara"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900"
+                />
+              </div>
+              <div className="p-2.5 bg-violet-50 text-violet-900 rounded-lg text-[11px]">
+                ℹ️ Le nouveau technicien reçoit l'ordre de travail sur Telegram ; le ticket repasse « Transmis ».
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Annuler</button>
+                <button type="submit" className="px-4 py-2 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-lg shadow-sm flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Réaffecter et envoyer</span>
+                </button>
+              </div>
+            </form>
+          )}
+
           {(activeAction === 'REOPEN' || isSuspended) && (
             <form onSubmit={handleReopen} className="space-y-3 text-xs">
               <div>
