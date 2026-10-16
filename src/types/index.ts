@@ -244,6 +244,7 @@ export interface Ticket {
   // Reopen update by dispatcher
   lastDispatcherUpdateNotes?: string;
   reopenedWithNewPhone?: string;
+  previousClientPhone?: string; // number replaced by the last relance (shown crossed out)
 
   // Splitter shared by several clients: tickets of the same splitter (and sector) are one
   // collective incident, handled by one technician and closed together.

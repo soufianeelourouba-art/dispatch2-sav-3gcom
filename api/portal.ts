@@ -43,6 +43,7 @@ const forTechnician = (t: Ticket, techId?: string) => ({
   lastLitigeRdvDate: t.lastLitigeRdvDate,
   lastDispatcherUpdateNotes: t.lastDispatcherUpdateNotes,
   reopenedWithNewPhone: t.reopenedWithNewPhone,
+  previousClientPhone: t.previousClientPhone,
   splitterRef: t.splitterRef,
   origin: t.origin,
   manualNature: t.manualNature,
@@ -69,7 +70,8 @@ export async function GET(request: Request): Promise<Response> {
     return json({
       technician: { fullName: tech.fullName },
       suspended: false,
-      tickets: open.map(t => forTechnician(t, tech.id)),
+      // Oldest claims first: the late ones are on top
+      tickets: open.sort((a, b) => (a.registeredAt || '').localeCompare(b.registeredAt || '')).map(t => forTechnician(t, tech.id)),
       toDeclare: prestations.toDeclare.map(t => forTechnician(t)),
       onHold: prestations.onHold.map(t => forTechnician(t)),
       declared: prestations.declared.map(t => forTechnician(t)),

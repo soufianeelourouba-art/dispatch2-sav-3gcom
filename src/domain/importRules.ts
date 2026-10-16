@@ -75,6 +75,10 @@ export function buildReopenedTicket(
     prestationStatus: null as any,
     collectiveLeadTicketId: null as any,
     lastLitigeNeedsContact: false,
+    // Relance details of the previous cycle do not apply to the new claim
+    lastDispatcherUpdateNotes: null as any,
+    reopenedWithNewPhone: null as any,
+    previousClientPhone: null as any,
     updatedAt: now,
   };
 }

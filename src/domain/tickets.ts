@@ -3,17 +3,16 @@
 import type { ManualTicketNature, SLAStatus, SumCheckResult, Ticket, TicketEvent, TicketStatus } from '../types';
 import { MANUAL_TICKET_NATURES } from '../types/index.js';
 import { formatPhonesIntl } from './litiges.js';
-import { formatCasablancaDateTime } from './format.js';
+import { formatCasablancaDateTime, formatSLADisplay } from './format.js';
 
 // --- SLA Invariant (24-Hour Strict SLA) ---
-export function computeTicketSLA(registeredAt: string): {
+export function computeTicketSLA(registeredAt: string, now: number = Date.now()): {
   slaDeadline: string;
   slaStatus: SLAStatus;
   slaRemainingHours: number;
 } {
   const regTime = new Date(registeredAt).getTime();
   const deadlineTime = regTime + 24 * 3600 * 1000; // 24 hours deadline
-  const now = Date.now();
   const diffMs = deadlineTime - now;
   const slaRemainingHours = Math.round((diffMs / (3600 * 1000)) * 10) / 10;
 
@@ -116,6 +115,13 @@ export function applyEventToTicket(ticket: Ticket, newEvent: TicketEvent, allTic
     updatedTicket.lastLitigeNeedsContact = false;
   }
 
+  // Each relance replaces the previous one: its note, and the new number with the one it replaces
+  if (newEvent.eventType === 'LITIGE_REOPENED') {
+    updatedTicket.lastDispatcherUpdateNotes = newEvent.dispatcherUpdateNotes || '';
+    updatedTicket.reopenedWithNewPhone = newEvent.newClientPhone || '';
+    updatedTicket.previousClientPhone = newEvent.newClientPhone ? ticket.clientPhone : '';
+  }
+
   if (newEvent.newClientPhone) {
     updatedTicket.clientPhone = newEvent.newClientPhone;
     updatedTicket.reopenedWithNewPhone = newEvent.newClientPhone;
@@ -134,9 +140,21 @@ const escapeHtml = (value: string | number | undefined) =>
 // Placeholder references ("N/A", "—") are not shown to the technician.
 const hasClientRef = (ref?: string) => !!ref && !['N/A', '—', '-', ''].includes(ref.trim());
 
+// Deadline line at the top of every work order, computed when the message is sent: the
+// technician sees at once which interventions are late (24 h SLA from the claim).
+export function formatSlaBanner(registeredAt: string | undefined, now: number = Date.now()): string {
+  if (!registeredAt || isNaN(Date.parse(registeredAt))) return '';
+  const sla = computeTicketSLA(registeredAt, now);
+  const { text } = formatSLADisplay(sla.slaRemainingHours, sla.slaStatus);
+  const due = escapeHtml(formatCasablancaDateTime(sla.slaDeadline));
+  if (sla.slaStatus === 'EXPIRED') return `🔴 <b>HORS DÉLAI — PRIORITAIRE</b>\n⏱ En retard de <b>${text}</b> (échéance ${due})\n`;
+  if (sla.slaStatus === 'WARNING') return `🟠 <b>URGENT</b> : plus que <b>${text}</b> avant hors délai (${due})\n`;
+  return `🟢 Délai : reste ${text} (avant le ${due})\n`;
+}
+
 // Work order sent to the technician on Telegram (HTML parse mode).
 // Separators are kept short so they never wrap on a phone screen.
-export function formatTicketMessage(ticket: Ticket): string {
+export function formatTicketMessage(ticket: Ticket, now: number = Date.now()): string {
   let historyBanner = '';
   if (ticket.importOutcome === 'REPRISE') {
     historyBanner = `\n\n🔁 <b>REPRISE</b> : le client a de nouveau réclamé après l'intervention` +
@@ -165,6 +183,7 @@ export function formatTicketMessage(ticket: Ticket): string {
   return (
     `🚨 <b>INTERVENTION FIBRE OPTIQUE 3GCOM</b>\n` +
     `━━━━━━━━━━━━━━\n` +
+    formatSlaBanner(ticket.registeredAt, now) +
     manualBanner +
     `📋 <b>Ticket :</b> ${escapeHtml(ticket.ticketNumber)}\n` +
     `👤 <b>Abonné :</b> ${escapeHtml(ticket.clientName)}${hasClientRef(ticket.clientNumber) ? ` (Réf : ${escapeHtml(ticket.clientNumber)})` : ''}\n` +
@@ -179,19 +198,32 @@ export function formatTicketMessage(ticket: Ticket): string {
   );
 }
 
-// Short message when the orienteur sends a litige back to the technician: what changed first
-// (new number, instructions), then the essentials. Phone numbers are tappable in Telegram.
-export function formatRelanceMessage(ticket: Ticket): string {
+// Litige sent back by the orienteur: the message must read at a glance as a return from the
+// office, with what changed first (new number to call, instructions), then a reminder of the
+// ticket. Phone numbers are tappable in Telegram.
+export function formatRelanceMessage(ticket: Ticket, now: number = Date.now()): string {
+  const newPhone = ticket.reopenedWithNewPhone;
+  const litigeDate = ticket.lastVisitedAt ? ` (le ${escapeHtml(formatCasablancaDateTime(ticket.lastVisitedAt))})` : '';
   return (
-    `🔄 <b>RELANCE — Ticket ${escapeHtml(ticket.ticketNumber)}</b>\n` +
-    (ticket.reopenedWithNewPhone
-      ? `📞 <b>Nouveau numéro : ${escapeHtml(formatPhonesIntl(ticket.reopenedWithNewPhone))}</b>\n`
-      : `📞 ${escapeHtml(formatPhonesIntl(ticket.clientPhone))}\n`) +
-    (ticket.lastDispatcherUpdateNotes ? `📝 <b>Orienteur :</b> ${escapeHtml(ticket.lastDispatcherUpdateNotes)}\n` : '') +
+    `↩️ <b>RETOUR DE L'ORIENTEUR</b>\n` +
+    `<b>Ticket ${escapeHtml(ticket.ticketNumber)}</b> : à reprendre\n` +
+    `━━━━━━━━━━━━━━\n` +
+    formatSlaBanner(ticket.registeredAt, now) +
+    (newPhone
+      ? `\n📞 <b>NOUVEAU NUMÉRO À APPELER</b>\n👉 <b>${escapeHtml(formatPhonesIntl(newPhone))}</b>\n` +
+        (ticket.previousClientPhone ? `<s>Ancien : ${escapeHtml(formatPhonesIntl(ticket.previousClientPhone))}</s>\n` : '')
+      : '') +
+    (ticket.lastDispatcherUpdateNotes
+      ? `\n💬 <b>Consigne de l'orienteur :</b>\n« ${escapeHtml(ticket.lastDispatcherUpdateNotes)} »\n`
+      : '') +
+    `━━━━━━━━━━━━━━\n` +
     `👤 ${escapeHtml(ticket.clientName)}\n` +
+    (newPhone ? '' : `📞 ${escapeHtml(formatPhonesIntl(ticket.clientPhone))}\n`) +
     `📍 ${escapeHtml(ticket.clientAddress)} · ${escapeHtml(ticket.rawZoneText)}` +
     (ticket.splitterRef ? `\n🔌 Splitter ${escapeHtml(ticket.splitterRef)}` : '') +
-    (ticket.lastLitigeReasonLabel ? `\n<i>Litige précédent : ${escapeHtml(ticket.lastLitigeReasonLabel)}</i>` : '')
+    (ticket.lastLitigeReasonLabel ? `\n❌ Votre litige : ${escapeHtml(ticket.lastLitigeReasonLabel)}${litigeDate}` : '') +
+    `\n━━━━━━━━━━━━━━\n` +
+    `<i>Répondez avec les boutons ci-dessous.</i>`
   );
 }
 
@@ -200,7 +232,8 @@ export function manualNatureLabel(nature?: ManualTicketNature): string {
 }
 
 // One work order for every ticket of a splitter incident: a single repair closes them all.
-export function formatSplitterGroupMessage(splitterRef: string, tickets: Ticket[]): string {
+export function formatSplitterGroupMessage(splitterRef: string, tickets: Ticket[], now: number = Date.now()): string {
+  const oldest = tickets.map(t => t.registeredAt).filter(Boolean).sort()[0];
   const lines = tickets.map((t, i) =>
     `${i + 1}. <b>${escapeHtml(t.ticketNumber)}</b> — ${escapeHtml(t.clientName)} · 📞 ${escapeHtml(formatPhonesIntl(t.clientPhone))}\n` +
     `    📍 ${escapeHtml(t.clientAddress)}`
@@ -208,6 +241,7 @@ export function formatSplitterGroupMessage(splitterRef: string, tickets: Ticket[
   return (
     `🔴 <b>INCIDENT SPLITTER ${escapeHtml(splitterRef)}</b>\n` +
     `━━━━━━━━━━━━━━\n` +
+    formatSlaBanner(oldest, now) +
     `👥 <b>${tickets.length} clients impactés</b> · Zone ${escapeHtml(tickets[0]?.rawZoneText)}\n` +
     `Priorité : un seul problème à résoudre sur le splitter.\n\n` +
     lines.join('\n') +

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MANUAL_TICKET_NATURES } from '../../types';
 import { describeMaterials, prestationLabel, PRESTATIONS, type PrestationDeclaration } from '../../domain/prestations';
-import { formatCasablancaDateTime } from '../../domain/format';
+import { formatCasablancaDateTime, formatSLADisplay } from '../../domain/format';
+import { computeTicketSLA } from '../../domain/tickets';
 import { formatPhoneIntl, formatPhonesIntl } from '../../domain/litiges';
 import { ReportForm, type FormTicket } from './ReportForm';
 import { LitigeForm } from './LitigeForm';
@@ -19,6 +20,8 @@ interface PortalTicket extends FormTicket {
   manualNature?: string;
   description?: string;
   reopenedWithNewPhone?: string;
+  previousClientPhone?: string;
+  registeredAt?: string;
   importOutcome?: string;
   lastLitigeReasonLabel?: string;
   lastLitigeRdvDate?: string;
@@ -338,6 +341,7 @@ const TicketList: React.FC<{
             <div>
               <div className="font-mono font-bold text-base text-slate-900">{t.ticketNumber}</div>
               {showClosedAt && t.closedAt && <div className="text-[11px] text-slate-500">NF le {formatCasablancaDateTime(t.closedAt)}</div>}
+              {!showClosedAt && <SlaChip registeredAt={t.registeredAt} />}
             </div>
             <div className="flex flex-col items-end gap-1">
               {t.splitterRef && (
@@ -353,10 +357,23 @@ const TicketList: React.FC<{
             </div>
           </div>
           {t.currentStatus === 'REOPENED' && (t.reopenedWithNewPhone || t.lastDispatcherUpdateNotes) && (
-            <div className="text-sm bg-sky-50 border border-sky-200 text-sky-950 rounded-xl px-3 py-2 space-y-0.5">
-              <div className="font-bold">🔄 Relance de l'orienteur</div>
-              {t.reopenedWithNewPhone && <div>📞 Nouveau numéro : <b>{formatPhonesIntl(t.reopenedWithNewPhone)}</b></div>}
-              {t.lastDispatcherUpdateNotes && <div>📝 {t.lastDispatcherUpdateNotes}</div>}
+            <div className="text-sm bg-sky-50 border-2 border-sky-300 text-sky-950 rounded-xl px-3 py-2.5 space-y-2">
+              <div className="font-bold text-sky-900">↩️ Retour de l'orienteur</div>
+              {t.reopenedWithNewPhone && (
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-sky-700">Nouveau numéro à appeler</div>
+                  <a href={`tel:${formatPhoneIntl(t.reopenedWithNewPhone.split('/')[0]).replace(/\s/g, '')}`} className="text-lg font-bold text-sky-900 underline">
+                    {formatPhonesIntl(t.reopenedWithNewPhone)}
+                  </a>
+                  {t.previousClientPhone && <div className="text-xs text-slate-500 line-through">Ancien : {formatPhonesIntl(t.previousClientPhone)}</div>}
+                </div>
+              )}
+              {t.lastDispatcherUpdateNotes && (
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-sky-700">Consigne</div>
+                  <div>« {t.lastDispatcherUpdateNotes} »</div>
+                </div>
+              )}
             </div>
           )}
           {t.importOutcome === 'REPRISE' && (
@@ -439,4 +456,17 @@ const DeclaredList: React.FC<{ tickets: PortalTicket[] }> = ({ tickets }) => {
       ))}
     </div>
   );
+};
+
+// 24 h deadline of an open intervention: red when late, orange under 6 h
+const SlaChip: React.FC<{ registeredAt?: string }> = ({ registeredAt }) => {
+  if (!registeredAt || isNaN(Date.parse(registeredAt))) return null;
+  const sla = computeTicketSLA(registeredAt);
+  const { text } = formatSLADisplay(sla.slaRemainingHours, sla.slaStatus);
+  const [label, cls] = sla.slaStatus === 'EXPIRED'
+    ? [`🔴 Hors délai · +${text}`, 'bg-rose-600 text-white']
+    : sla.slaStatus === 'WARNING'
+    ? [`🟠 Urgent · reste ${text}`, 'bg-amber-100 text-amber-900']
+    : [`Reste ${text}`, 'bg-emerald-50 text-emerald-800'];
+  return <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${cls}`}>{label}</span>;
 };

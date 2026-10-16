@@ -24,6 +24,7 @@ import { appBaseUrl, configNfButton, declareButton, setTechnicianMenu, technicia
 import { LITIGE_REASONS } from '../src/types/index.js';
 import { RDV_SLOTS, dayLabel, parseRdvText, rdvDayOptions, rdvToIso } from '../src/domain/litiges.js';
 import { formatCasablancaDateTime } from '../src/domain/format.js';
+import { computeTicketSLA } from '../src/domain/tickets.js';
 import type { Technician } from '../src/types/index.js';
 
 // Questions asked when a litige needs typed information (the answer comes as a message).
@@ -153,6 +154,10 @@ async function activate(base: string, chatId: string, token: string, from: any) 
 async function listTickets(chatId: string, tech: Technician) {
   const tickets = await openTicketsOf(tech.id);
   if (tickets.length === 0) return sendMessage(chatId, '📭 Aucune intervention en cours pour le moment.');
+  // Oldest claims first, so the late ones come first, with a short summary
+  tickets.sort((a, b) => (a.registeredAt || '').localeCompare(b.registeredAt || ''));
+  const late = tickets.filter(t => t.registeredAt && computeTicketSLA(t.registeredAt).slaStatus === 'EXPIRED').length;
+  await sendMessage(chatId, `📋 <b>${tickets.length} intervention(s) en cours</b>` + (late ? `\n🔴 <b>${late} hors délai</b> : à traiter en priorité` : ''));
   await sendWorkOrdersTo(tech, tickets);
 }
 

@@ -189,16 +189,54 @@ describe('formatTicketMessage', () => {
     expect(formatTicketMessage(ticket({ clientPhone: '212522525236/212666274849' }))).toContain('+212 522 52 52 36 / +212 666 27 48 49');
   });
 
-  it('relance : nouveau numéro et consigne de l\'orienteur en premier', () => {
+  it('retour de l\'orienteur : titre explicite, nouveau numéro mis en avant, ancien barré, consigne', () => {
     const text = formatRelanceMessage(ticket({
       currentStatus: 'REOPENED',
+      clientName: 'Karim',
+      clientPhone: '0661223344',
       reopenedWithNewPhone: '0661223344',
+      previousClientPhone: '0522000000',
       lastDispatcherUpdateNotes: 'Client joignable après 17h',
       lastLitigeReasonLabel: 'Client injoignable',
     }));
-    expect(text.indexOf('Nouveau numéro : +212 661 22 33 44')).toBeLessThan(text.indexOf('Client joignable après 17h'));
-    expect(text).toContain('RELANCE — Ticket REC-1');
-    expect(text).toContain('Litige précédent : Client injoignable');
+    expect(text.startsWith('↩️ <b>RETOUR DE L\'ORIENTEUR</b>')).toBe(true);
+    expect(text).toContain('Ticket REC-1</b> : à reprendre');
+    expect(text).toContain('NOUVEAU NUMÉRO À APPELER</b>\n👉 <b>+212 661 22 33 44</b>');
+    expect(text).toContain('<s>Ancien : +212 522 00 00 00</s>');
+    expect(text.indexOf('NOUVEAU NUMÉRO')).toBeLessThan(text.indexOf('Client joignable après 17h'));
+    expect(text.indexOf('Client joignable après 17h')).toBeLessThan(text.indexOf('Karim'));
+    expect(text).toContain('Votre litige : Client injoignable');
+    // the number is not repeated in the reminder
+    expect(text.split('+212 661 22 33 44')).toHaveLength(2);
+  });
+
+  it('retour sans nouveau numéro : numéro habituel dans le rappel', () => {
+    const text = formatRelanceMessage(ticket({ currentStatus: 'REOPENED', clientPhone: '0661223344', lastDispatcherUpdateNotes: 'RDV confirmé à 10h' }));
+    expect(text).not.toContain('NOUVEAU NUMÉRO');
+    expect(text).toContain('📞 +212 661 22 33 44');
+    expect(text).toContain('« RDV confirmé à 10h »');
+  });
+
+  it('délai SLA en tête du message : hors délai, urgent, dans les temps', () => {
+    const registeredAt = '2026-10-15T09:00:00Z'; // échéance 16/10 09:00
+    const late = formatTicketMessage(ticket({ registeredAt }), Date.parse('2026-10-16T14:30:00Z'));
+    expect(late).toContain('🔴 <b>HORS DÉLAI — PRIORITAIRE</b>');
+    expect(late).toContain('En retard de <b>5h30</b> (échéance 16/10/2026 09:00)');
+    expect(late.indexOf('HORS DÉLAI')).toBeLessThan(late.indexOf('Ticket :'));
+    expect(formatTicketMessage(ticket({ registeredAt }), Date.parse('2026-10-16T05:00:00Z'))).toContain('🟠 <b>URGENT</b> : plus que <b>4h</b>');
+    expect(formatTicketMessage(ticket({ registeredAt }), Date.parse('2026-10-15T10:00:00Z'))).toContain('🟢 Délai : reste 23h');
+    expect(formatRelanceMessage(ticket({ registeredAt }), Date.parse('2026-10-16T14:30:00Z'))).toContain('HORS DÉLAI');
+  });
+
+  it('nouvelle relance : remplace la consigne et le numéro de la précédente', () => {
+    const base = ticket({ clientPhone: '0522000000', reopenedWithNewPhone: '0611111111', lastDispatcherUpdateNotes: 'ancienne' });
+    const ev = (extra: Partial<TicketEvent>): TicketEvent => ({
+      id: 'e', ticketId: base.id, eventType: 'LITIGE_REOPENED', actorRole: 'DISPATCHER', actorName: 'O', createdAt: '2026-10-16T10:00:00Z', ...extra,
+    });
+    const withPhone = applyEventToTicket(base, ev({ dispatcherUpdateNotes: 'appeler le fils', newClientPhone: '0661223344' }), []);
+    expect(withPhone).toMatchObject({ clientPhone: '0661223344', reopenedWithNewPhone: '0661223344', previousClientPhone: '0522000000', lastDispatcherUpdateNotes: 'appeler le fils' });
+    const noPhone = applyEventToTicket(withPhone, ev({ dispatcherUpdateNotes: 'RDV demain' }), []);
+    expect(noPhone).toMatchObject({ clientPhone: '0661223344', reopenedWithNewPhone: '', previousClientPhone: '', lastDispatcherUpdateNotes: 'RDV demain' });
   });
 
   it('neutralise le HTML venant des données importées', () => {

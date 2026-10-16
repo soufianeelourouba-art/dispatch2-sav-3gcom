@@ -102,10 +102,10 @@ try {
   check('Les boutons du ticket sont retirés', telegramCalls.some(c => c.method === 'editMessageReplyMarkup' && c.body.reply_markup.inline_keyboard.length === 0));
 
   // 4b. Orienteur validates the RDV litige → suspended, out of the technician's list
-  const orienteurEvent = async (n: number, eventType: 'LITIGE_VALIDATED' | 'LITIGE_REOPENED') => {
+  const orienteurEvent = async (n: number, eventType: 'LITIGE_VALIDATED' | 'LITIGE_REOPENED', extra: Record<string, string> = {}) => {
     const ticket = { ...(await read(n)), id: tid(n) } as any;
     const events = (await db.collection('events').where('ticketId', '==', tid(n)).get()).docs.map(d => d.data()) as any[];
-    const evt = { id: `evt-${ID}-${eventType}-${n}`, ticketId: tid(n), sectorId: SECTOR, eventType, actorRole: 'DISPATCHER', actorName: 'Orienteur Test', technicianId: TECH, createdAt: new Date().toISOString() };
+    const evt = { id: `evt-${ID}-${eventType}-${n}`, ticketId: tid(n), sectorId: SECTOR, eventType, actorRole: 'DISPATCHER', actorName: 'Orienteur Test', technicianId: TECH, createdAt: new Date().toISOString(), ...extra };
     await db.doc(`events/${evt.id}`).set(evt);
     await db.doc(`tickets/${tid(n)}`).set(applyEventToTicket(ticket, evt as any, [...events, evt]));
   };
@@ -118,8 +118,24 @@ try {
     && telegramCalls.slice(callsBeforeOld).some(c => c.method === 'sendMessage' && /suspendu/.test(c.body.text)));
   const app = await (await portalGet()).json() as any;
   check('Suspendu : visible dans « En attente » de l\'app technicien', app.onHold?.some((t: any) => t.id === tid(1) && t.lastLitigeRdvDate), app.onHold);
-  await orienteurEvent(1, 'LITIGE_REOPENED');
+  await orienteurEvent(1, 'LITIGE_REOPENED', { dispatcherUpdateNotes: 'Appeler le fils du client', newClientPhone: '0677889900' });
   check('Relance → le ticket revient chez le technicien', (await read(1)).currentStatus === 'REOPENED' && (await openTicketsOf(TECH)).some(t => t.id === tid(1)));
+
+  // 4b bis. Messages received with /tickets: deadline first, relance readable
+  await db.doc(`tickets/${tid(6)}`).set({ ...(await read(5)), id: tid(6), ticketNumber: `${ID}-6`, registeredAt: new Date(Date.now() - 30 * 3600000).toISOString() });
+  const callsBeforeList = telegramCalls.length;
+  await say('/tickets');
+  const sent = telegramCalls.slice(callsBeforeList).filter(c => c.method === 'sendMessage').map(c => c.body.text as string);
+  check('/tickets : résumé avec le nombre de hors délai', /intervention\(s\) en cours/.test(sent[0]) && /1 hors délai/.test(sent[0]), sent[0]);
+  const lateOrder = sent.find(t => t.includes(`${ID}-6`)) || '';
+  check('Ordre hors délai : « HORS DÉLAI » en tête du message', lateOrder.indexOf('HORS DÉLAI') > -1 && lateOrder.indexOf('HORS DÉLAI') < lateOrder.indexOf(`${ID}-6`), lateOrder);
+  check('/tickets : le hors délai est envoyé en premier', sent.findIndex(t => t.includes(`${ID}-6`)) === 1, sent.map(t => t.slice(0, 40)));
+  const relance = sent.find(t => t.includes(`${ID}-1`)) || '';
+  check('Relance : « RETOUR DE L’ORIENTEUR », nouveau numéro, ancien barré, consigne',
+    relance.startsWith("↩️ <b>RETOUR DE L'ORIENTEUR</b>") && relance.includes('👉 <b>+212 677 88 99 00</b>')
+    && relance.includes('<s>Ancien : +212 661 22 33 44</s>') && relance.includes('« Appeler le fils du client »'), relance);
+  const appRelance = ((await (await portalGet()).json()) as any).tickets.find((t: any) => t.id === tid(1));
+  check('App technicien : nouveau et ancien numéro de la relance', appRelance?.reopenedWithNewPhone === '0677889900' && appRelance?.previousClientPhone === '0661223344', appRelance);
 
   // 4c. Wrong zone: litige "Hors de ma zone", then the orienteur reassigns to another technician
   await press(`lit:${tid(2)}`);
@@ -152,7 +168,7 @@ try {
 } finally {
   const refs = [
     ...(await db.collection('events').where('sectorId', '==', SECTOR).get()).docs.map(d => d.ref),
-    ...[1, 2, 3, 4, 5].flatMap(n => [db.doc(`tickets/${tid(n)}`), db.doc(`telegramMessages/${tid(n)}`)]),
+    ...[1, 2, 3, 4, 5, 6].flatMap(n => [db.doc(`tickets/${tid(n)}`), db.doc(`telegramMessages/${tid(n)}`)]),
     db.doc(`telegramSessions/${CHAT}`), db.doc(`technicians/${TECH}`), db.doc(`sectors/${SECTOR}`),
   ];
   const batch = db.batch();
