@@ -3,14 +3,22 @@
 // on site, the prestation can be declared right after or later ("À déclarer").
 // Pure module, shared by the forms (browser) and the server (api/).
 
-export type PrestationCode = 'FO_01_02' | 'FO_04' | 'FO_08' | 'FO_32';
+export type PrestationCode = 'FO_01_02' | 'FO_04' | 'FO_08' | 'FO_32' | 'AUCUNE';
 
-export const PRESTATIONS: { code: PrestationCode; label: string; withRaccordements?: boolean }[] = [
+// "Aucune action": NF without any work to pay (nothing connected, no material). It counts as
+// declared, so the ticket leaves "À déclarer", and is never paid.
+export const PRESTATIONS: { code: PrestationCode; label: string; withRaccordements?: boolean; noWork?: boolean }[] = [
   { code: 'FO_01_02', label: '01-02 FO', withRaccordements: true },
   { code: 'FO_04', label: '04 FO' },
   { code: 'FO_08', label: '08 FO' },
   { code: 'FO_32', label: '32 FO (splitter)' },
+  { code: 'AUCUNE', label: 'Aucune action', noWork: true },
 ];
+
+// Prestations that have a price
+export const PAID_PRESTATIONS = PRESTATIONS.filter(p => !p.noWork);
+
+export const isNoWork = (code?: string) => PRESTATIONS.some(p => p.code === code && p.noWork);
 
 export const MAX_RACCORDEMENTS = 4;
 
@@ -96,7 +104,9 @@ export function validateDeclaration(input: DeclarationInput): string[] {
   if (!isWholeNumber(m.joints, LIMITS.joints)) errors.push(`Nombre de joints invalide (0 à ${LIMITS.joints}).`);
   if (!isWholeNumber(m.splitters, LIMITS.splitters)) errors.push(`Nombre de splitters invalide (0 à ${LIMITS.splitters}).`);
   if (!isWholeNumber(m.cableMeters, LIMITS.cableMeters)) errors.push(`Longueur de câble invalide (0 à ${LIMITS.cableMeters} m).`);
-  if (hasMaterials(m) && input.materialPhotoCount < 1) {
+  if (prestation?.noWork && hasMaterials(m)) {
+    errors.push('« Aucune action » : pas de matériel à déclarer. Choisissez la prestation réalisée si vous avez posé du matériel.');
+  } else if (hasMaterials(m) && input.materialPhotoCount < 1) {
     errors.push('Prenez au moins une photo du matériel installé.');
   }
   if (input.materialPhotoCount > LIMITS.photosPerKind) errors.push(`${LIMITS.photosPerKind} photos maximum.`);

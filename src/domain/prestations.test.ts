@@ -81,3 +81,13 @@ describe('affichage et état', () => {
     expect(needsDeclaration({ currentStatus: 'COMPLETED', prestationStatus: null })).toBe(true);
   });
 });
+
+describe('« Aucune action »', () => {
+  const none = { joints: 0, splitters: 0, cableMeters: 0 };
+  it('valide sans raccordement ni matériel', () => {
+    expect(validateDeclaration({ code: 'AUCUNE', materials: none, materialPhotoCount: 0 })).toEqual([]);
+  });
+  it('refuse du matériel avec « Aucune action »', () => {
+    expect(validateDeclaration({ code: 'AUCUNE', materials: { ...none, joints: 2 }, materialPhotoCount: 1 }).join(' ')).toMatch(/pas de matériel/);
+  });
+});

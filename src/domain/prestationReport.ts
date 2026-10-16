@@ -5,7 +5,7 @@
 // declarations of earlier cycles of reopened tickets (reprise / new claim), dated by their declaration.
 import type { Technician, Ticket } from '../types';
 import { toMoroccoWallClock } from './moroccoTime.js';
-import { PRESTATIONS, type MaterialsInstalled, type PrestationCode, type PrestationDeclaration, type PrestationStatus } from './prestations.js';
+import { PAID_PRESTATIONS, isNoWork, type MaterialsInstalled, type PrestationCode, type PrestationDeclaration, type PrestationStatus } from './prestations.js';
 
 export interface Period {
   from: string; // YYYY-MM-DD (Morocco), inclusive
@@ -122,11 +122,11 @@ export function prestationLines(tickets: Ticket[], technicians: Technician[], pe
 }
 
 export function amountOf(line: PrestationLine, tarifs: Tarifs): number {
-  return line.code ? line.units * (tarifs[line.code] || 0) : 0;
+  return line.code && !isNoWork(line.code) ? line.units * (tarifs[line.code] || 0) : 0;
 }
 
 export function hasTarifs(tarifs: Tarifs): boolean {
-  return PRESTATIONS.some(p => (tarifs[p.code] || 0) > 0);
+  return PAID_PRESTATIONS.some(p => (tarifs[p.code] || 0) > 0);
 }
 
 // One row per technician, highest amount (then most NF) first
@@ -140,7 +140,7 @@ export function summarizeByTechnician(lines: PrestationLine[], tarifs: Tarifs = 
         techId: line.techId,
         techName: line.techName,
         nf: 0, declared: 0, toDeclare: 0, nonBillable: 0, included: 0,
-        units: { FO_01_02: 0, FO_04: 0, FO_08: 0, FO_32: 0 },
+        units: { FO_01_02: 0, FO_04: 0, FO_08: 0, FO_32: 0, AUCUNE: 0 },
         materials: { ...NO_MATERIALS },
         amount: 0,
         lines: [],

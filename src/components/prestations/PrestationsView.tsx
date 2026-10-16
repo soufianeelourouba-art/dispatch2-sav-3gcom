@@ -3,7 +3,7 @@ import { Ticket, User } from '../../types';
 import { store } from '../../services/storage';
 import { exportPrestationsToExcel } from '../../services/excelExporter';
 import { formatCasablancaDateTime } from '../../domain/format';
-import { PRESTATIONS, describeMaterials, hasMaterials, prestationLabel, type PrestationCode, type PrestationStatus } from '../../domain/prestations';
+import { PRESTATIONS, PAID_PRESTATIONS, describeMaterials, hasMaterials, prestationLabel, type PrestationCode, type PrestationStatus } from '../../domain/prestations';
 import {
   amountOf, hasTarifs, periodPreset, prestationLines, summarizeByTechnician,
   type Period, type PrestationLine, type Tarifs,
@@ -209,7 +209,7 @@ export const PrestationsView: React.FC<PrestationsViewProps> = ({ currentUser, o
                       </tr>
                       {open && (
                         <tr>
-                          <td colSpan={8 + (withAmounts ? 1 : 0)} className="bg-slate-50/70 px-3 pb-3">
+                          <td colSpan={5 + PRESTATIONS.length + (withAmounts ? 1 : 0)} className="bg-slate-50/70 px-3 pb-3">
                             <DetailLines lines={detail} tarifs={withAmounts ? tarifs : null} onOpen={onOpenTicketHistory} />
                           </td>
                         </tr>
@@ -275,11 +275,11 @@ const DetailLines: React.FC<{ lines: PrestationLine[]; tarifs: Tarifs | null; on
 // Unit prices (manager only): 01-02 FO is paid per raccordement
 const TarifsEditor: React.FC<{ tarifs: Tarifs; onClose: () => void }> = ({ tarifs, onClose }) => {
   const [draft, setDraft] = useState<Record<string, string>>(
-    () => Object.fromEntries(PRESTATIONS.map(p => [p.code, tarifs[p.code] ? String(tarifs[p.code]) : '']))
+    () => Object.fromEntries(PAID_PRESTATIONS.map(p => [p.code, tarifs[p.code] ? String(tarifs[p.code]) : '']))
   );
   const save = () => {
     const prices: Tarifs = {};
-    PRESTATIONS.forEach(p => {
+    PAID_PRESTATIONS.forEach(p => {
       const value = Number(draft[p.code].replace(',', '.'));
       if (value > 0) prices[p.code] = Math.round(value * 100) / 100;
     });
@@ -290,7 +290,7 @@ const TarifsEditor: React.FC<{ tarifs: Tarifs; onClose: () => void }> = ({ tarif
     <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3 text-xs">
       <div className="font-bold text-slate-900">Tarifs payés aux techniciens (DH)</div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {PRESTATIONS.map(p => (
+        {PAID_PRESTATIONS.map(p => (
           <label key={p.code} className="space-y-1">
             <span className="block font-semibold text-slate-700">{p.label}{p.withRaccordements ? ' · par raccordement' : ''}</span>
             <input

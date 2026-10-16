@@ -85,3 +85,14 @@ describe('prestations par période', () => {
     expect(periodPreset('LAST_MONTH', new Date('2026-01-10T10:00:00Z'))).toEqual({ from: '2025-12-01', to: '2025-12-31' });
   });
 });
+
+describe('« Aucune action » dans le paiement', () => {
+  it('comptée comme déclarée, dans sa colonne, sans montant', () => {
+    const lines = prestationLines([
+      ticket({ prestationStatus: 'DECLAREE', prestation: decl({ code: 'AUCUNE' }) }),
+      ticket({ prestationStatus: 'DECLAREE', prestation: decl({ code: 'FO_04' }) }),
+    ], techs, october);
+    const [ali] = summarizeByTechnician(lines, { FO_04: 150, AUCUNE: 999 });
+    expect(ali).toMatchObject({ declared: 2, toDeclare: 0, amount: 150, units: { AUCUNE: 1, FO_04: 1 } });
+  });
+});

@@ -3,6 +3,7 @@ import {
   LIMITS,
   MAX_RACCORDEMENTS,
   PRESTATIONS,
+  isNoWork,
   describeMaterials,
   hasMaterials,
   prestationLabel,
@@ -69,7 +70,8 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   const isGroup = mode === 'nf' && splitterGroupSize > 1;
   const isConfig = mode === 'nf' && nfType === 'CENTRAL_CONFIG';
   const declaring = mode === 'declare' || (declareNow && !ticket.nonBillable);
-  const effectiveMaterials = withMaterials ? materials : NO_MATERIALS;
+  const noWork = isNoWork(code || undefined);
+  const effectiveMaterials = withMaterials && !noWork ? materials : NO_MATERIALS;
   const setMaterial = (key: keyof MaterialsInstalled) => (value: number) => setMaterials(m => ({ ...m, [key]: value }));
 
   const declaration = {
@@ -199,9 +201,12 @@ export const ReportForm: React.FC<ReportFormProps> = ({
             <div className={title}>{mode === 'nf' ? 'Prestation réalisée' : '1. Prestation réalisée'}</div>
             <div className="grid grid-cols-2 gap-2">
               {PRESTATIONS.map(p => (
-                <Choice key={p.code} selected={code === p.code} onClick={() => setCode(p.code)}>{p.label}</Choice>
+                <Choice key={p.code} selected={code === p.code} onClick={() => setCode(p.code)}>{p.noWork ? '🚫 ' : ''}{p.label}</Choice>
               ))}
             </div>
+            {noWork && (
+              <p className="text-xs text-slate-500">Aucun raccordement ni matériel : rien à payer pour ce ticket.</p>
+            )}
             {code === 'FO_01_02' && (
               <div className="flex items-center justify-between gap-3 pt-1">
                 <span className="text-sm font-semibold text-slate-700">Nombre de raccordements</span>
@@ -210,7 +215,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
             )}
           </div>
 
-          <div className={section}>
+          {!noWork && <div className={section}>
             <div className={title}>Matériel installé</div>
             <div className="grid grid-cols-2 gap-2">
               <Choice selected={!withMaterials} onClick={() => setWithMaterials(false)}>Aucun</Choice>
@@ -236,7 +241,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
                 </div>
               </div>
             )}
-          </div>
+          </div>}
         </>
       )}
 
