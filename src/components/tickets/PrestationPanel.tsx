@@ -32,7 +32,9 @@ export const PrestationPanel: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
         </div>
         <div>
           <span className="text-slate-500 block">Prestation</span>
-          {ticket.prestationStatus === 'INCLUSE' ? (
+          {ticket.prestationStatus === 'NON_FACTURABLE' ? (
+            <b className="text-rose-700">Non facturable : reprise de sa propre intervention (≤ 7 jours)</b>
+          ) : ticket.prestationStatus === 'INCLUSE' ? (
             <b className="text-slate-700">Incluse dans l'incident splitter{lead ? ` (ticket ${lead.ticketNumber})` : ''}</b>
           ) : ticket.prestation ? (
             <>

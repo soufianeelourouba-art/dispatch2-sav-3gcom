@@ -19,6 +19,9 @@ import { db, auth, createAuthAccount } from './firebase';
 import { computeTicketSLA, reduceTicketStatus, applyEventToTicket, computeSumCheck } from '../domain/tickets';
 import { notifyTechnicians } from './api';
 import { normalizeSplitterRef } from '../domain/splitter';
+import { isInDailyScope } from '../domain/dailyScope';
+import { buildReopenedTicket, classifyKnownTicket, opensNewCycle, type ImportOutcome } from '../domain/importRules';
+import { formatCasablancaDateTime } from '../domain/format';
 import {
   collection,
   doc,
@@ -798,66 +801,75 @@ class AppStateStore {
   }
 
   // --- Excel Import & Upsert ---
-  public upsertTicket(ticketData: Omit<Ticket, 'id' | 'currentStatus' | 'isClosed' | 'createdAt' | 'updatedAt' | 'slaDeadline' | 'slaStatus' | 'slaRemainingHours'>): { ticket: Ticket; isNew: boolean } {
+  // Import of one row of the operator's file (rules in domain/importRules.ts):
+  // new ticket, still in progress (unchanged), reprise ≤ 7 days, new claim, retour client.
+  public upsertTicket(
+    ticketData: Omit<Ticket, 'id' | 'currentStatus' | 'isClosed' | 'createdAt' | 'updatedAt' | 'slaDeadline' | 'slaStatus' | 'slaRemainingHours'>
+  ): { ticket: Ticket; isNew: boolean; outcome: ImportOutcome } {
     const existingIndex = this.tickets.findIndex(t => t.ticketNumber === ticketData.ticketNumber);
-    const sla = computeTicketSLA(ticketData.registeredAt);
+    const now = new Date().toISOString();
 
-    if (existingIndex >= 0) {
-      const existing = this.tickets[existingIndex];
-      const newVisitCount = existing.visitCount + 1;
-
-      const updated: Ticket = {
-        ...existing,
-        ...ticketData,
-        visitCount: newVisitCount,
-        slaDeadline: sla.slaDeadline,
-        slaStatus: sla.slaStatus,
-        slaRemainingHours: sla.slaRemainingHours,
-        updatedAt: new Date().toISOString(),
-      };
-
-      this.tickets[existingIndex] = updated;
-
-      this.addTicketEvent({
-        ticketId: existing.id,
-        eventType: 'IMPORT',
-        actorRole: 'SYSTEM',
-        actorName: 'Import Fichier Excel (Deuxième visite)',
-        notes: `Nouveau passage détecté. Visite #${newVisitCount}. Données client rafraîchies.`,
-      });
-
-      this.persist();
-      this.syncDocToFirestore('tickets', updated.id, updated);
-      return { ticket: updated, isNew: false };
-    } else {
-      const newId = ticketDocId(ticketData.ticketNumber);
+    if (existingIndex < 0) {
+      const sla = computeTicketSLA(ticketData.registeredAt);
       const newTicket: Ticket = {
         ...ticketData,
-        id: newId,
+        id: ticketDocId(ticketData.ticketNumber),
         visitCount: 1,
         currentStatus: ticketData.technicalZoneId ? 'TO_ASSIGN' : 'ZONE_TO_MAP',
         isClosed: false,
-        slaDeadline: sla.slaDeadline,
-        slaStatus: sla.slaStatus,
-        slaRemainingHours: sla.slaRemainingHours,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        ...sla,
+        importOutcome: 'NOUVEAU',
+        createdAt: now,
+        updatedAt: now,
       };
-
       this.tickets.unshift(newTicket);
-
       this.addTicketEvent({
-        ticketId: newId,
+        ticketId: newTicket.id,
         eventType: 'IMPORT',
         actorRole: 'SYSTEM',
         actorName: 'Import Fichier Excel',
         notes: 'Création initiale du dossier réclamation.',
       });
-
       this.persist();
       this.syncDocToFirestore('tickets', newTicket.id, newTicket);
-      return { ticket: newTicket, isNew: true };
+      return { ticket: newTicket, isNew: true, outcome: 'NOUVEAU' };
     }
+
+    const existing = this.tickets[existingIndex];
+    const outcome = classifyKnownTicket(existing);
+
+    if (!opensNewCycle(outcome)) {
+      // Still to be handled: keep technician, status and SLA; only refresh the client contact
+      const contact: Partial<Ticket> = {};
+      if (ticketData.clientPhone && ticketData.clientPhone !== existing.clientPhone) contact.clientPhone = ticketData.clientPhone;
+      if (ticketData.clientAddress && ticketData.clientAddress !== existing.clientAddress) contact.clientAddress = ticketData.clientAddress;
+      if (ticketData.splitterRef && ticketData.splitterRef !== existing.splitterRef) contact.splitterRef = ticketData.splitterRef;
+      if (Object.keys(contact).length > 0) {
+        this.tickets[existingIndex] = { ...existing, ...contact, updatedAt: now };
+        this.persist();
+        this.syncDocToFirestore('tickets', existing.id, { ...contact, updatedAt: now });
+      }
+      return { ticket: this.tickets[existingIndex], isNew: false, outcome };
+    }
+
+    // Handled before (NF, litige, suspended): a new intervention starts on the same ticket
+    const reopened = buildReopenedTicket(existing, ticketData, outcome, computeTicketSLA(ticketData.registeredAt), now);
+    this.tickets[existingIndex] = reopened;
+
+    const closedOn = existing.completedAt ? ` (NF du ${formatCasablancaDateTime(existing.completedAt)})` : '';
+    this.addTicketEvent({
+      ticketId: existing.id,
+      eventType: 'IMPORT',
+      actorRole: 'SYSTEM',
+      actorName: 'Import Fichier Excel',
+      notes:
+        outcome === 'REPRISE' ? `Reprise : le client a de nouveau réclamé moins de 7 jours après l'intervention${closedOn}. Retour au même technicien, non facturable pour lui.`
+        : outcome === 'RETOUR_CLIENT' ? `Retour client : ticket de nouveau réclamé alors qu'il était en litige (${existing.lastLitigeReasonLabel || 'litige'}). Retour au même technicien.`
+        : `Nouvelle réclamation sur un ticket clôturé il y a plus de 7 jours${closedOn}.`,
+    });
+    this.persist();
+    this.syncDocToFirestore('tickets', reopened.id, this.tickets[existingIndex]);
+    return { ticket: this.tickets[existingIndex], isNew: false, outcome };
   }
 
   // --- Referentiel Management (Full Edit/Delete capabilities §3) ---
@@ -1009,8 +1021,10 @@ class AppStateStore {
   }
 
   // --- Strict Sum Check Invariant ---
-  public computeSumCheck(requestingUser?: User | null): SumCheckResult {
-    return computeSumCheck(this.getTickets(requestingUser));
+  // dailyOnly: the orienteur's daily working set (domain/dailyScope.ts)
+  public computeSumCheck(requestingUser?: User | null, dailyOnly = false): SumCheckResult {
+    const tickets = this.getTickets(requestingUser);
+    return computeSumCheck(dailyOnly ? tickets.filter(t => isInDailyScope(t)) : tickets);
   }
 }
 

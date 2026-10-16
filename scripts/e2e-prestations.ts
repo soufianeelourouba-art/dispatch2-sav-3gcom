@@ -88,13 +88,28 @@ try {
   r = await call('POST', { action: 'DECLARE', ticketId: `tkt-${ID}-2`, declaration: { code: 'FO_32' } });
   check('Déclarer deux fois → refusé', r.status === 409, r);
 
+  // Reprise ≤ 7 days: not billable for the technician of the previous intervention, billable for another one
+  await db.doc(`tickets/tkt-${ID}-4`).set(ticket(4, { importOutcome: 'REPRISE', repriseOfTechId: TECH, preferredTechId: TECH, visitCount: 2 }));
+  await db.doc(`tickets/tkt-${ID}-5`).set(ticket(5, { importOutcome: 'REPRISE', repriseOfTechId: 'tech-autre', visitCount: 2 }));
+  r = await call('GET');
+  check('App technicien : sa reprise est signalée non facturable', r.data.tickets.find((t: any) => t.id === `tkt-${ID}-4`)?.nonBillable === true
+    && r.data.tickets.find((t: any) => t.id === `tkt-${ID}-5`)?.nonBillable === false);
+  r = await call('POST', { action: 'REPORT', ticketId: `tkt-${ID}-4`, report: { kind: 'NF' } });
+  check('Reprise de sa propre intervention → NF non facturable', (await read(4)).prestationStatus === 'NON_FACTURABLE', (await read(4)).prestationStatus);
+  r = await call('POST', { action: 'NF_FORM', ticketId: `tkt-${ID}-5`, nfType: 'STANDARD' });
+  check('Reprise d\'un autre technicien → prestation à déclarer (facturable)', (await read(5)).prestationStatus === 'A_DECLARER', (await read(5)).prestationStatus);
+  r = await call('GET');
+  check('À déclarer : la reprise non facturable n\'y figure pas', !r.data.toDeclare.some((t: any) => t.id === `tkt-${ID}-4`) && r.data.toDeclare.some((t: any) => t.id === `tkt-${ID}-5`));
+  r = await call('POST', { action: 'DECLARE', ticketId: `tkt-${ID}-4`, declaration: { code: 'FO_04' } });
+  check('Déclarer une reprise non facturable → refusé', r.status === 409, r);
+
   const events = (await db.collection('events').where('ticketId', '==', `tkt-${ID}-2`).get()).docs.map(d => d.data().eventType);
   check('Historique : NF puis prestation, statut toujours NF', events.includes('NF_SUBMITTED') && events.includes('PRESTATION_DECLARED') && (await read(2)).currentStatus === 'COMPLETED', events);
 } finally {
   const refs = [
     ...(await db.collection('events').where('sectorId', '==', SECTOR).get()).docs.map(d => d.ref),
     ...(await db.collection('photos').where('sectorId', '==', SECTOR).get()).docs.map(d => d.ref),
-    ...[1, 2, 3].map(n => db.doc(`tickets/tkt-${ID}-${n}`)),
+    ...[1, 2, 3, 4, 5].map(n => db.doc(`tickets/tkt-${ID}-${n}`)),
     db.doc(`technicians/${TECH}`), db.doc(`technicalZones/${ZONE}`), db.doc(`sectors/${SECTOR}`),
   ];
   const batch = db.batch();

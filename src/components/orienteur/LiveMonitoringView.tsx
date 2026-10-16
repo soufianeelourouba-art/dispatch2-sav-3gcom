@@ -4,9 +4,10 @@ import { store } from '../../services/storage';
 import { formatCasablancaDateTime, formatCasablancaTimeOnly, formatSLADisplay } from '../../domain/format';
 import { exportTicketsToExcel } from '../../services/excelExporter';
 import { LitigeResolutionModal } from './LitigeResolutionModal';
-import { SplitterBadge, ManualTicketBadge, NfSummary, SuspendedNotice } from '../tickets/TicketBadges';
+import { SplitterBadge, ManualTicketBadge, NfSummary, SuspendedNotice, ImportOutcomeBadge } from '../tickets/TicketBadges';
 import { SplitterIncidentsPanel } from '../tickets/SplitterIncidentsPanel';
 import { splitterKey, groupBySplitter } from '../../domain/splitter';
+import { isInDailyScope } from '../../domain/dailyScope';
 import { 
   Clock, 
   AlertTriangle, 
@@ -50,7 +51,8 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
     return () => unsub();
   }, []);
 
-  const tickets = store.getTickets(currentUser, selectedSectorFilter);
+  // Daily working set: received / handled today + everything still to handle (domain/dailyScope.ts)
+  const tickets = store.getTickets(currentUser, selectedSectorFilter).filter(t => isInDailyScope(t));
   const technicians = store.getTechnicians(currentUser, selectedSectorFilter).filter(t => t.isActive);
 
   // SLA Counter metrics (§2 & §5)
@@ -198,6 +200,9 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
             Suivi Opérationnel & Traitement des Retards SLA HD
           </h1>
+          <p className="text-[11px] text-slate-500 mt-1">
+            📅 Affichage du jour : tickets reçus ou traités aujourd'hui, et tout ce qui reste à traiter des jours précédents.
+          </p>
           <p className="text-xs text-slate-500 mt-1">
             Surveillance en temps réel des techniciens 3GCOM · Incitation prioritaire sur les dossiers Hors Délai (&gt; 24h)
           </p>
@@ -529,6 +534,7 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
 
                     <SplitterBadge ticket={ticket} groupSize={splitterGroupSize(ticket)} />
                     <ManualTicketBadge ticket={ticket} />
+                      <ImportOutcomeBadge ticket={ticket} />
                   </div>
 
                   {ticket.description && (

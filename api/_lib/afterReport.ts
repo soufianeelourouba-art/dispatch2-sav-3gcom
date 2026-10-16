@@ -17,6 +17,11 @@ export async function afterTechnicianReport(base: string, tech: Technician, tick
     : `le ticket ${lead.ticketNumber}`;
   const nf = lead.nfType === 'CENTRAL_CONFIG' ? `NF config centrale (ONT ${lead.ontSerialNumber})` : 'NF';
 
+  if (lead.prestationStatus === 'NON_FACTURABLE') {
+    await sendMessage(tech.telegramChatId, `🟢 <b>${nf} enregistrée</b> pour ${what}. Reprise de votre intervention : pas de prestation à déclarer.`);
+    return;
+  }
+
   if (lead.prestationStatus === 'DECLAREE') {
     await removeButtons([lead.id], 'declare');
     await sendMessage(tech.telegramChatId, `🟢 <b>${nf} enregistrée</b> pour ${what}, prestation déclarée. Merci !`);

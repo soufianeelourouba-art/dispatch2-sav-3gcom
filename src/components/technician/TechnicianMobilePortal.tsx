@@ -19,6 +19,7 @@ interface PortalTicket extends FormTicket {
   manualNature?: string;
   description?: string;
   reopenedWithNewPhone?: string;
+  importOutcome?: string;
   lastLitigeReasonLabel?: string;
   lastLitigeRdvDate?: string;
   lastDispatcherUpdateNotes?: string;
@@ -356,6 +357,16 @@ const TicketList: React.FC<{
               <div className="font-bold">🔄 Relance de l'orienteur</div>
               {t.reopenedWithNewPhone && <div>📞 Nouveau numéro : <b>{formatPhonesIntl(t.reopenedWithNewPhone)}</b></div>}
               {t.lastDispatcherUpdateNotes && <div>📝 {t.lastDispatcherUpdateNotes}</div>}
+            </div>
+          )}
+          {t.importOutcome === 'REPRISE' && (
+            <div className="text-sm bg-rose-50 border border-rose-200 text-rose-900 rounded-xl px-3 py-2">
+              🔁 <b>Reprise</b> : le client a de nouveau réclamé après l'intervention.{t.nonBillable ? ' Non facturable.' : ''}
+            </div>
+          )}
+          {t.importOutcome === 'RETOUR_CLIENT' && (
+            <div className="text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-3 py-2">
+              ↩️ <b>Retour client</b>{t.lastLitigeReasonLabel ? ` · litige précédent : ${t.lastLitigeReasonLabel}` : ''}
             </div>
           )}
           {t.description && <div className="text-sm text-violet-900 bg-violet-50 rounded-lg px-2.5 py-1.5">📝 {t.description}</div>}

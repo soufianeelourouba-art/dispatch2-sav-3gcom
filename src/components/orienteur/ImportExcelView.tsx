@@ -2,6 +2,16 @@ import React, { useState, useRef } from 'react';
 import { User, ImportReport } from '../../types';
 import { store } from '../../services/storage';
 import { formatCasablancaDateTime } from '../../domain/format';
+import { IMPORT_OUTCOME_LABELS, type ImportOutcome } from '../../domain/importRules';
+
+// Colour of each import outcome (preview column and report)
+const OUTCOME_STYLES: Record<ImportOutcome, string> = {
+  NOUVEAU: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  EN_COURS: 'bg-slate-100 text-slate-700 border-slate-200',
+  REPRISE: 'bg-rose-50 text-rose-800 border-rose-200',
+  NOUVELLE_RECLAMATION: 'bg-sky-50 text-sky-800 border-sky-200',
+  RETOUR_CLIENT: 'bg-amber-50 text-amber-800 border-amber-200',
+};
 import { parseExcelBuffer, generateSampleExcelFile, InterpretedRow, DetectedColumns } from '../../services/excelImporter';
 import { 
   UploadCloud, 
@@ -256,7 +266,7 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
               </span>
             </div>
             <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
-              <span className="text-xs text-amber-700 block font-semibold">2es visites rattachées</span>
+              <span className="text-xs text-amber-700 block font-semibold">Interventions rouvertes</span>
               <span className="text-2xl font-bold text-amber-800 font-mono tabular-nums mt-1 block">
                 {report.updatedVisitsCount}
               </span>
@@ -267,6 +277,14 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
                 {report.rejectedCount}
               </span>
             </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 text-xs">
+            {(Object.keys(IMPORT_OUTCOME_LABELS) as ImportOutcome[]).map(o => (
+              <span key={o} className={`px-2.5 py-1 rounded-lg border font-semibold ${OUTCOME_STYLES[o]}`}>
+                {IMPORT_OUTCOME_LABELS[o]} : {report.outcomes?.[o] ?? 0}
+              </span>
+            ))}
           </div>
 
           {report.rejectedRows.length > 0 && (
@@ -386,6 +404,19 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
             ))}
           </div>
 
+          {/* What the import will do with each known ticket */}
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+            <span className="font-semibold text-slate-600 mr-1">Situation des tickets :</span>
+            {(Object.keys(IMPORT_OUTCOME_LABELS) as ImportOutcome[]).map(o => {
+              const count = previewRows.filter(r => r.importOutcome === o).length;
+              return (
+                <span key={o} className={`px-2 py-0.5 rounded-md border font-semibold ${OUTCOME_STYLES[o]} ${count === 0 ? 'opacity-40' : ''}`}>
+                  {IMPORT_OUTCOME_LABELS[o]} : {count}
+                </span>
+              );
+            })}
+          </div>
+
           {previewFilter !== 'ALL' && (
             <div className="text-xs text-slate-600">
               Affichage : {filteredPreviewRows.length} ligne(s) filtrée(s) ·{' '}
@@ -403,6 +434,7 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
                   <th className="py-3 px-3">Téléphone</th>
                   <th className="py-3 px-3">Zone lue</th>
                   <th className="py-3 px-3">Zone validée (Secteur)</th>
+                  <th className="py-3 px-3">Situation</th>
                   <th className="py-3 px-3">Splitter</th>
                   <th className="py-3 px-3">Date (Maroc)</th>
                   <th className="py-3 px-3">Validation</th>
@@ -435,6 +467,13 @@ export const ImportExcelView: React.FC<ImportExcelViewProps> = ({
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[11px] font-medium border border-amber-200">
                           <AlertTriangle className="w-3 h-3 text-amber-600" />
                           <span>Zone inconnue</span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      {row.importOutcome && (
+                        <span className={`inline-block px-2 py-0.5 rounded-md border text-[11px] font-semibold whitespace-nowrap ${OUTCOME_STYLES[row.importOutcome]}`}>
+                          {IMPORT_OUTCOME_LABELS[row.importOutcome]}
                         </span>
                       )}
                     </td>

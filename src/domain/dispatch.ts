@@ -73,6 +73,23 @@ export function computeDispatchProposals(
   let splitterGroupedCount = 0;
 
   const decide = (ticket: Ticket) => {
+    // Reprise / retour client: back to the technician of the previous intervention
+    const previousTech = ticket.preferredTechId ? sectorTechs.find(t => t.id === ticket.preferredTechId) : undefined;
+    if (previousTech) {
+      workloadMap[previousTech.id]++;
+      proposals.push({
+        ticketId: ticket.id,
+        technicianId: previousTech.id,
+        technicianName: previousTech.fullName,
+        rationale: ticket.importOutcome === 'REPRISE'
+          ? `🔁 Reprise : même technicien (${previousTech.fullName}), intervention non facturable pour lui.`
+          : `↩️ Retour client : même technicien (${previousTech.fullName}).`,
+        isSecondVisit: true,
+        priorityScore: 120,
+      });
+      return;
+    }
+
     const key = splitterKey(ticket);
     const groupTech = key ? sectorTechs.find(t => t.id === splitterTech.get(key)) : undefined;
     if (groupTech) {

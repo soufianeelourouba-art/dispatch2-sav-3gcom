@@ -28,7 +28,7 @@ async function technicianFrom(token: unknown) {
 }
 
 // Fields the technician needs (no internal data)
-const forTechnician = (t: Ticket) => ({
+const forTechnician = (t: Ticket, techId?: string) => ({
   id: t.id,
   ticketNumber: t.ticketNumber,
   clientName: t.clientName,
@@ -47,6 +47,9 @@ const forTechnician = (t: Ticket) => ({
   origin: t.origin,
   manualNature: t.manualNature,
   description: t.description,
+  importOutcome: t.importOutcome,
+  // Reprise of his own intervention within 7 days: no prestation to declare
+  nonBillable: !!techId && t.repriseOfTechId === techId,
   nfType: t.nfType,
   ontSerialNumber: t.ontSerialNumber,
   closedAt: t.isClosed ? t.lastEventAt : undefined,
@@ -66,10 +69,10 @@ export async function GET(request: Request): Promise<Response> {
     return json({
       technician: { fullName: tech.fullName },
       suspended: false,
-      tickets: open.map(forTechnician),
-      toDeclare: prestations.toDeclare.map(forTechnician),
-      onHold: prestations.onHold.map(forTechnician),
-      declared: prestations.declared.map(forTechnician),
+      tickets: open.map(t => forTechnician(t, tech.id)),
+      toDeclare: prestations.toDeclare.map(t => forTechnician(t)),
+      onHold: prestations.onHold.map(t => forTechnician(t)),
+      declared: prestations.declared.map(t => forTechnician(t)),
     });
   } catch (err) {
     return handleError(err);

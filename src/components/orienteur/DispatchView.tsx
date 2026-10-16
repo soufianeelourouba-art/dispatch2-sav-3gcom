@@ -6,9 +6,10 @@ import { calculateDispatchProposals } from '../../services/dispatchEngine';
 import { telegramGateway } from '../../services/telegramSimulator';
 import { LitigeResolutionModal } from './LitigeResolutionModal';
 import { ManualTicketModal } from '../tickets/ManualTicketModal';
-import { SplitterBadge, ManualTicketBadge, NfSummary, SuspendedNotice } from '../tickets/TicketBadges';
+import { SplitterBadge, ManualTicketBadge, NfSummary, SuspendedNotice, ImportOutcomeBadge } from '../tickets/TicketBadges';
 import { SplitterIncidentsPanel } from '../tickets/SplitterIncidentsPanel';
 import { splitterKey, groupBySplitter } from '../../domain/splitter';
+import { isInDailyScope } from '../../domain/dailyScope';
 import { 
   Send, 
   RotateCcw, 
@@ -65,7 +66,9 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
     return () => unsub();
   }, []);
 
-  const tickets = store.getTickets(currentUser, selectedSectorId);
+  // Daily working set: received / handled today + everything still to handle (domain/dailyScope.ts)
+  const allTickets = store.getTickets(currentUser, selectedSectorId);
+  const tickets = allTickets.filter(t => isInDailyScope(t));
   const technicians = store.getTechnicians(currentUser, selectedSectorId).filter(t => t.isActive);
 
   // Tickets eligible for dispatch (§5: PENDING, PROPOSED, TO_ASSIGN, ZONE_TO_MAP, REOPENED)
@@ -152,11 +155,12 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
   };
 
   // Litiges accepted by the orienteur, waiting to be sent back (earliest RDV first)
+  // All suspended litiges, whatever the day they were suspended
   const suspendedTickets = useMemo(
-    () => tickets
+    () => allTickets
       .filter(t => t.currentStatus === 'SUSPENDED')
       .sort((a, b) => (a.lastLitigeRdvDate || '9999').localeCompare(b.lastLitigeRdvDate || '9999')),
-    [tickets]
+    [allTickets]
   );
 
   // Base list depending on view scope
@@ -302,6 +306,9 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             Engagement 24h strict : les tickets dépassés (HD) ou proches de l'échéance sont automatiquement placés en tête de file.
+          </p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            📅 Affichage du jour : tickets reçus ou traités aujourd'hui, et tout ce qui reste à traiter des jours précédents.
           </p>
         </div>
 
@@ -667,6 +674,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({
 
                       <SplitterBadge ticket={ticket} groupSize={splitterGroupSize(ticket)} />
                       <ManualTicketBadge ticket={ticket} />
+                      <ImportOutcomeBadge ticket={ticket} />
                     </div>
 
                     {ticket.description && (

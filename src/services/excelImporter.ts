@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { ImportReport, RejectedRow } from '../types';
 import { store } from './storage';
+import { classifyKnownTicket, type ImportOutcome } from '../domain/importRules';
 import { detectHeaders, interpretRows, DetectedColumns, InterpretedRow } from '../domain/excelImport';
 
 export { detectHeaders };
@@ -40,6 +41,12 @@ export function parseExcelBuffer(
     aliases: store.getZoneAliases(),
   });
 
+  // Known tickets: what the import will do with each of them (shown in the preview)
+  const known = new Map(store.getTickets().map(t => [t.ticketNumber, t]));
+  interpretedRows.forEach(row => {
+    if (row.isValid) row.importOutcome = classifyKnownTicket(known.get(row.ticketNumber));
+  });
+
   // Every row is shown before import: the orienteur must be able to check the whole file
   const previewRows = interpretedRows;
 
@@ -48,6 +55,7 @@ export function parseExcelBuffer(
     let importedCount = 0;
     let updatedVisitsCount = 0;
     let unmappedZoneCount = 0;
+    const outcomes: Record<ImportOutcome, number> = { NOUVEAU: 0, EN_COURS: 0, REPRISE: 0, NOUVELLE_RECLAMATION: 0, RETOUR_CLIENT: 0 };
     const rejectedRows: RejectedRow[] = [];
 
     interpretedRows.forEach((item, index) => {
@@ -78,9 +86,10 @@ export function parseExcelBuffer(
         visitCount: 1,
       });
 
+      outcomes[result.outcome]++;
       if (result.isNew) {
         importedCount++;
-      } else {
+      } else if (result.outcome !== 'EN_COURS') {
         updatedVisitsCount++;
       }
     });
@@ -91,6 +100,7 @@ export function parseExcelBuffer(
       updatedVisitsCount,
       rejectedCount: rejectedRows.length,
       unmappedZoneCount,
+      outcomes,
       rejectedRows,
       timestamp: new Date().toISOString(),
     };

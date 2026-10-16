@@ -178,6 +178,8 @@ export interface InterpretedRow {
   splitterRef?: string;
   resolvedZoneId?: string;
   resolvedZoneLabel?: string;
+  // What the import will do with this ticket (filled in once the known tickets are checked)
+  importOutcome?: import('./importRules').ImportOutcome;
   // Zone text as written in the file when it was matched despite a typo
   zoneCorrectedFrom?: string;
   resolvedSectorId?: string;

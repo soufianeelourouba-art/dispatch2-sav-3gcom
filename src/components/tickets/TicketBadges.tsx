@@ -28,6 +28,7 @@ export const NfSummary: React.FC<{ ticket: Ticket; onOpen?: () => void }> = ({ t
   const photos = (ticket.prestation?.photoIds.length || 0) + (ticket.serialPhotoIds?.length || 0);
   const prestation =
     ticket.prestationStatus === 'INCLUSE' ? <span className="text-slate-600">incluse dans l'incident splitter</span>
+    : ticket.prestationStatus === 'NON_FACTURABLE' ? <b className="text-rose-700">non facturable (reprise)</b>
     : ticket.prestation ? (
       <b className="text-emerald-800">
         {prestationLabel(ticket.prestation.code)}{ticket.prestation.raccordements ? ` × ${ticket.prestation.raccordements}` : ''}
@@ -78,6 +79,18 @@ export const SuspendedNotice: React.FC<{ ticket: Ticket; onRelaunch: () => void 
       </button>
     </div>
   );
+};
+
+// Ticket coming back in an import after having been handled (domain/importRules.ts)
+export const ImportOutcomeBadge: React.FC<{ ticket: Ticket }> = ({ ticket }) => {
+  if (ticket.isClosed) return null;
+  const badge =
+    ticket.importOutcome === 'REPRISE' ? { text: '🔁 Reprise ≤ 7 j · non facturable', style: 'bg-rose-100 text-rose-800' } :
+    ticket.importOutcome === 'RETOUR_CLIENT' ? { text: '↩️ Retour client', style: 'bg-amber-100 text-amber-900' } :
+    ticket.importOutcome === 'NOUVELLE_RECLAMATION' ? { text: 'Nouvelle réclamation', style: 'bg-sky-100 text-sky-800' } :
+    null;
+  if (!badge) return null;
+  return <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${badge.style}`}>{badge.text}</span>;
 };
 
 // "Hors ticket · Fiabilisation": created in the app, to follow up and bill.

@@ -98,7 +98,10 @@ export async function recordTechnicianReport(
 
     const updated: Ticket = {
       ...applyEventToTicket(ticket, event, [...events, event]),
-      ...(report.kind === 'NF' ? { prestationStatus: 'A_DECLARER' as const } : {}),
+      // Reprise of his own intervention within 7 days: not billable; anyone else is paid normally
+      ...(report.kind === 'NF'
+        ? { prestationStatus: ticket.repriseOfTechId === tech.id ? ('NON_FACTURABLE' as const) : ('A_DECLARER' as const) }
+        : {}),
       ...extra,
     };
     tx.set(db.collection('events').doc(event.id), clean(event));

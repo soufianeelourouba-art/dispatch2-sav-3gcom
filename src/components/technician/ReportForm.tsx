@@ -21,6 +21,7 @@ export interface FormTicket {
   clientAddress: string;
   splitterRef?: string;
   nfType?: 'STANDARD' | 'CENTRAL_CONFIG';
+  nonBillable?: boolean; // reprise of his own intervention: no prestation
 }
 
 interface ReportFormProps {
@@ -67,7 +68,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
   const isGroup = mode === 'nf' && splitterGroupSize > 1;
   const isConfig = mode === 'nf' && nfType === 'CENTRAL_CONFIG';
-  const declaring = mode === 'declare' || declareNow;
+  const declaring = mode === 'declare' || (declareNow && !ticket.nonBillable);
   const effectiveMaterials = withMaterials ? materials : NO_MATERIALS;
   const setMaterial = (key: keyof MaterialsInstalled) => (value: number) => setMaterials(m => ({ ...m, [key]: value }));
 
@@ -173,7 +174,13 @@ export const ReportForm: React.FC<ReportFormProps> = ({
         </div>
       )}
 
-      {mode === 'nf' && (
+      {mode === 'nf' && ticket.nonBillable && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-900 rounded-2xl p-4 text-sm">
+          🔁 <b>Reprise de votre intervention</b> : pas de prestation à déclarer pour ce ticket.
+        </div>
+      )}
+
+      {mode === 'nf' && !ticket.nonBillable && (
         <div className={section}>
           <div className={title}>2. Prestation</div>
           <div className="grid grid-cols-2 gap-2">

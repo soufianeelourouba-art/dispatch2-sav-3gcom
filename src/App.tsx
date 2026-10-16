@@ -76,7 +76,8 @@ export default function App() {
   }
 
   // Calculate sum check for the active scope
-  const sumCheck = store.computeSumCheck(currentUser);
+  // Orienteurs work on the day's set; the manager keeps the overall figures
+  const sumCheck = store.computeSumCheck(currentUser, currentUser.role === 'DISPATCHER');
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col text-slate-900 font-sans antialiased">

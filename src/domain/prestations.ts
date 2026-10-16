@@ -40,7 +40,8 @@ export interface PrestationDeclaration {
 
 // À déclarer → Déclarée. For a splitter incident the prestation is paid once: the other tickets
 // closed with it are "Incluse" and point to the ticket carrying the declaration.
-export type PrestationStatus = 'A_DECLARER' | 'DECLAREE' | 'INCLUSE';
+// "NON_FACTURABLE": reprise of his own intervention within 7 days (non-quality, not paid).
+export type PrestationStatus = 'A_DECLARER' | 'DECLAREE' | 'INCLUSE' | 'NON_FACTURABLE';
 
 export function prestationLabel(code?: PrestationCode): string {
   return PRESTATIONS.find(p => p.code === code)?.label || '—';
@@ -111,6 +112,7 @@ export function validateConfigNf(serial: string | undefined, serialPhotoCount: n
 }
 
 // Ticket needing a declaration: closed in NF, not declared yet, not covered by a splitter lead.
-export function needsDeclaration(ticket: { currentStatus: string; prestationStatus?: PrestationStatus }): boolean {
-  return ticket.currentStatus === 'COMPLETED' && (ticket.prestationStatus === 'A_DECLARER' || ticket.prestationStatus === undefined);
+export function needsDeclaration(ticket: { currentStatus: string; prestationStatus?: PrestationStatus | null }): boolean {
+  // null: cleared when a new intervention starts on the ticket
+  return ticket.currentStatus === 'COMPLETED' && (ticket.prestationStatus === 'A_DECLARER' || ticket.prestationStatus == null);
 }

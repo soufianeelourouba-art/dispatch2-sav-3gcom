@@ -3,6 +3,7 @@
 import type { ManualTicketNature, SLAStatus, SumCheckResult, Ticket, TicketEvent, TicketStatus } from '../types';
 import { MANUAL_TICKET_NATURES } from '../types/index.js';
 import { formatPhonesIntl } from './litiges.js';
+import { formatCasablancaDateTime } from './format.js';
 
 // --- SLA Invariant (24-Hour Strict SLA) ---
 export function computeTicketSLA(registeredAt: string): {
@@ -90,6 +91,10 @@ export function applyEventToTicket(ticket: Ticket, newEvent: TicketEvent, allTic
     updatedTicket.currentAssignedTechId = newEvent.technicianId;
   }
 
+  if (newEvent.eventType === 'NF_SUBMITTED') {
+    updatedTicket.completedAt = newEvent.createdAt;
+  }
+
   if (newEvent.nfType) {
     updatedTicket.nfType = newEvent.nfType;
     updatedTicket.ontSerialNumber = newEvent.ontSerialNumber;
@@ -133,10 +138,16 @@ const hasClientRef = (ref?: string) => !!ref && !['N/A', '—', '-', ''].include
 // Separators are kept short so they never wrap on a phone screen.
 export function formatTicketMessage(ticket: Ticket): string {
   let historyBanner = '';
-  if (ticket.visitCount > 1) {
-    historyBanner = `\n\n⚠️ <b>DEUXIÈME VISITE (SAV RÉCLAMATION)</b>\n` +
-      `• Précédent échec : ${escapeHtml(ticket.lastLitigeReasonLabel || 'Litige précédent')}\n` +
-      `• Ancien technicien : ${escapeHtml(ticket.lastVisitedTechName || 'Non précisé')}`;
+  if (ticket.importOutcome === 'REPRISE') {
+    historyBanner = `\n\n🔁 <b>REPRISE</b> : le client a de nouveau réclamé après l'intervention` +
+      (ticket.completedAt ? ` du ${escapeHtml(formatCasablancaDateTime(ticket.completedAt))}` : '') +
+      `.\n<i>Reprise de votre intervention : non facturable.</i>`;
+  } else if (ticket.importOutcome === 'RETOUR_CLIENT') {
+    historyBanner = `\n\n↩️ <b>RETOUR CLIENT</b> : ticket de nouveau réclamé.\n` +
+      `• Litige précédent : ${escapeHtml(ticket.lastLitigeReasonLabel || 'Non précisé')}`;
+  } else if (ticket.visitCount > 1) {
+    historyBanner = `\n\n⚠️ <b>NOUVELLE RÉCLAMATION</b> (visite n°${ticket.visitCount})` +
+      (ticket.lastVisitedTechName ? `\n• Ancien technicien : ${escapeHtml(ticket.lastVisitedTechName)}` : '');
   }
 
   let reopenBanner = '';

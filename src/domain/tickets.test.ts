@@ -111,6 +111,7 @@ describe('applyEventToTicket', () => {
       ontSerialNumber: 'ALCL123',
       cableLengthMeters: 40,
       lastEventAt: nf.createdAt,
+      completedAt: nf.createdAt,
     });
   });
 
@@ -207,7 +208,20 @@ describe('formatTicketMessage', () => {
 
   it('signale une deuxième visite et la mise à jour de l\'orienteur', () => {
     const text = formatTicketMessage(ticket({ visitCount: 2, lastLitigeReasonLabel: 'Client injoignable', lastDispatcherUpdateNotes: 'Appeler avant' }));
-    expect(text).toContain('DEUXIÈME VISITE');
+    expect(text).toContain('NOUVELLE RÉCLAMATION');
     expect(text).toContain('Appeler avant');
+  });
+
+  it('reprise : signalée au technicien comme non facturable', () => {
+    const text = formatTicketMessage(ticket({ visitCount: 2, importOutcome: 'REPRISE', completedAt: '2026-10-14T09:00:00Z' }));
+    expect(text).toContain('REPRISE');
+    expect(text).toContain('14/10/2026 09:00');
+    expect(text).toContain('non facturable');
+  });
+
+  it('retour client : rappelle le litige précédent', () => {
+    const text = formatTicketMessage(ticket({ visitCount: 2, importOutcome: 'RETOUR_CLIENT', lastLitigeReasonLabel: 'Rendez-vous convenu (RDV)' }));
+    expect(text).toContain('RETOUR CLIENT');
+    expect(text).toContain('Rendez-vous convenu (RDV)');
   });
 });

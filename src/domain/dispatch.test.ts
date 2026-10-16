@@ -121,6 +121,26 @@ describe('computeDispatchProposals — incident splitter', () => {
   });
 });
 
+describe('computeDispatchProposals — reprise et retour client', () => {
+  it('reprise : même technicien, même s\'il est plus chargé', () => {
+    const t = ticket('R', { preferredTechId: 't-ali', importOutcome: 'REPRISE', visitCount: 2 });
+    const { proposals } = computeDispatchProposals([t], [ali, badr], openAssigned('t-ali', 5), 'sec-casa');
+    expect(proposals[0]).toMatchObject({ technicianId: 't-ali', priorityScore: 120 });
+    expect(proposals[0].rationale).toMatch(/non facturable/);
+  });
+
+  it('retour client : même technicien', () => {
+    const t = ticket('R', { preferredTechId: 't-badr', importOutcome: 'RETOUR_CLIENT', visitCount: 2 });
+    expect(computeDispatchProposals([t], [ali, badr], [], 'sec-casa').proposals[0].technicianId).toBe('t-badr');
+  });
+
+  it('technicien d\'origine indisponible : dispatch normal', () => {
+    const t = ticket('R', { preferredTechId: 't-parti', importOutcome: 'REPRISE', visitCount: 2 });
+    const { proposals } = computeDispatchProposals([t], [ali, badr], openAssigned('t-ali', 2), 'sec-casa');
+    expect(proposals[0].technicianId).toBe('t-badr');
+  });
+});
+
 describe('computeDispatchProposals — deuxième visite', () => {
   it('cause externe (client injoignable) : reconduit le même technicien même s\'il est plus chargé', () => {
     const t = ticket('T1', { visitCount: 2, lastLitigeReasonCode: 'CLIENT_UNREACHABLE', lastVisitedTechName: 'Ali' });

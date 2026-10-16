@@ -1,4 +1,5 @@
 import type { PrestationDeclaration, PrestationStatus } from '../domain/prestations.js';
+import type { ImportOutcome } from '../domain/importRules.js';
 
 export type Role = 'DISPATCHER' | 'MANAGER';
 
@@ -244,6 +245,13 @@ export interface Ticket {
   // Prestation declared by the technician after the NF (paid work, see domain/prestations.ts)
   prestationStatus?: PrestationStatus;
   prestation?: PrestationDeclaration;
+  // Import of a ticket already known (domain/importRules.ts)
+  importOutcome?: ImportOutcome;
+  preferredTechId?: string;   // technician to send it back to (reprise, retour client)
+  repriseOfTechId?: string;   // reprise: NF by this technician is not billable
+  completedAt?: string;       // date of the last NF
+  previousPrestations?: PrestationDeclaration[]; // declarations of earlier interventions
+
   // Splitter incident closed collectively: ticket carrying the single declaration
   collectiveLeadTicketId?: string;
   // NF config centrale: photos of the ONT serial label (collection "photos")
@@ -280,6 +288,8 @@ export interface ImportReport {
   updatedVisitsCount: number;
   rejectedCount: number;
   unmappedZoneCount: number;
+  // How each valid row was handled (new, unchanged, reprise, new claim, retour client)
+  outcomes: Record<ImportOutcome, number>;
   rejectedRows: RejectedRow[];
   timestamp: string;
 }

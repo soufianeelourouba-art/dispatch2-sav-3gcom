@@ -154,7 +154,8 @@ export async function submitNfForm(tech: Technician, payload: NfFormPayload): Pr
     ? await recordSplitterReport(tech, ticket.id, report, leadExtra)
     : [await recordTechnicianReport(tech, ticket.id, report, leadExtra)];
 
-  if (payload.declaration) {
+  // Nothing to declare on a non-billable reprise
+  if (payload.declaration && closed[0].prestationStatus !== 'NON_FACTURABLE') {
     closed[0] = await declarePrestation(tech, closed[0].id, payload.declaration);
   }
   return closed;

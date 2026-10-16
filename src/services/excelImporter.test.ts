@@ -8,6 +8,7 @@ vi.mock('./storage', () => ({
       { id: 'z2', sectorId: 'sec-casa', label: 'Gauthier', msanCode: 'MSAN-GAU', createdAt: '' },
     ],
     getZoneAliases: () => [],
+    getTickets: () => [],
   },
 }));
 
@@ -20,6 +21,8 @@ describe('fichier type (bouton « Test 1 clic »)', () => {
     const parsed = parseExcelBuffer(sample, 'sec-casa');
 
     expect(parsed.totalRawRows).toBe(7);
+    // nothing known in the base yet: every valid row is new
+    expect(parsed.previewRows.filter(r => r.isValid).every(r => r.importOutcome === 'NOUVEAU')).toBe(true);
     expect(parsed.detectedColumns.clientNameCol).toBe('Nom Abonné');
     expect(parsed.detectedColumns.splitterCol).toBe('N° Splitter');
     // rows 1 and 4 share a splitter (collective incident)

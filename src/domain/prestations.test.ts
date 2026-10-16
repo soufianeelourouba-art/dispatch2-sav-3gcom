@@ -75,5 +75,9 @@ describe('affichage et état', () => {
     expect(needsDeclaration({ currentStatus: 'COMPLETED', prestationStatus: 'DECLAREE' })).toBe(false);
     expect(needsDeclaration({ currentStatus: 'COMPLETED', prestationStatus: 'INCLUSE' })).toBe(false);
     expect(needsDeclaration({ currentStatus: 'LITIGE' })).toBe(false);
+    // reprise of his own intervention: nothing to declare
+    expect(needsDeclaration({ currentStatus: 'COMPLETED', prestationStatus: 'NON_FACTURABLE' })).toBe(false);
+    // cleared when a new intervention starts
+    expect(needsDeclaration({ currentStatus: 'COMPLETED', prestationStatus: null })).toBe(true);
   });
 });
