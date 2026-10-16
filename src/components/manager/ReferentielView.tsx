@@ -385,14 +385,18 @@ export const ReferentielView: React.FC = () => {
     notifySuccess(res.success ? `Lien de réinitialisation envoyé à ${email}.` : `Envoi impossible : ${res.error}`);
   };
 
-  const handleDeleteUser = (userId: string, name: string) => {
+  const handleDeleteUser = async (userId: string, name: string) => {
     if (userId === store.getCurrentUser()?.id) {
       alert('Vous ne pouvez pas supprimer votre propre compte.');
       return;
     }
-    if (confirm(`Retirer l'accès de "${name}" ? Il ne pourra plus rien consulter.`)) {
-      store.deleteUser(userId);
-      notifySuccess('Accès retiré.');
+    if (confirm(`Supprimer le compte de "${name}" ? Il ne pourra plus se connecter. Son adresse e-mail pourra être réutilisée.`)) {
+      try {
+        await store.deleteUser(userId);
+        notifySuccess('Compte supprimé.');
+      } catch (err: any) {
+        alert(`Suppression impossible : ${err?.message || 'erreur inconnue'}`);
+      }
     }
   };
 

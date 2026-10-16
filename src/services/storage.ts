@@ -15,9 +15,9 @@ import {
   ManualTicketNature,
   MANUAL_TICKET_NATURES,
 } from '../types';
-import { db, auth, createAuthAccount } from './firebase';
+import { db, auth } from './firebase';
 import { computeTicketSLA, reduceTicketStatus, applyEventToTicket, computeSumCheck } from '../domain/tickets';
-import { notifyTechnicians } from './api';
+import { createStaffAccount, deleteStaffAccount, notifyTechnicians } from './api';
 import { normalizeSplitterRef } from '../domain/splitter';
 import { isInDailyScope } from '../domain/dailyScope';
 import { buildReopenedTicket, classifyKnownTicket, opensNewCycle, type ImportOutcome } from '../domain/importRules';
@@ -334,25 +334,19 @@ class AppStateStore {
     return this.getSectorOrienteurs(sectorId).map(u => u.name).join(', ');
   }
 
-  // Creates the Firebase Auth account, then its profile document (role + sectors).
+  // Creates the sign-in account and its profile (role + sectors) on the server (api/accounts.ts).
+  // An e-mail whose access was removed earlier is reused.
   public async addUser(
     userData: { name: string; email: string; password: string; role: User['role']; sectorIds?: string[] }
   ): Promise<User> {
-    const email = userData.email.trim().toLowerCase();
-    const uid = await createAuthAccount(email, userData.password);
-    const sectorIds = userData.role === 'DISPATCHER' ? (userData.sectorIds || []) : [];
-    const newUser: User = {
-      id: uid,
-      username: email,
-      email,
-      name: userData.name.trim(),
+    const { user } = await createStaffAccount({
+      name: userData.name,
+      email: userData.email,
+      password: userData.password,
       role: userData.role,
-      sectorId: sectorIds[0],
-      sectorIds,
-      createdAt: new Date().toISOString(),
-    };
-    await setDoc(doc(db, 'users', uid), clean(newUser));
-    return newUser;
+      sectorIds: userData.role === 'DISPATCHER' ? (userData.sectorIds || []) : [],
+    });
+    return user;
   }
 
   public updateUser(userId: string, data: Partial<User>) {
@@ -365,11 +359,13 @@ class AppStateStore {
     }
   }
 
-  // Removing the profile revokes all data access immediately (rules require a profile).
-  public deleteUser(userId: string) {
+  // Removes the profile (all data access is revoked: the rules require one) and the sign-in
+  // account, so the e-mail can be used again.
+  public async deleteUser(userId: string) {
+    await deleteStaffAccount(userId);
     this.users = this.users.filter(u => u.id !== userId);
     this.persist();
-    this.deleteDocFromFirestore('users', userId);
+    this.notify();
   }
 
   // --- Multi-Sector & DC Scoping Engine ---

@@ -1,5 +1,6 @@
 // Calls to the server functions (Vercel /api), authenticated with the Firebase ID token.
 import { auth } from './firebase';
+import type { User } from '../types';
 
 async function authedPost<T>(path: string, body: unknown): Promise<T> {
   const user = auth.currentUser;
@@ -29,4 +30,13 @@ export function notifyTechnicians(ticketIds: string[]) {
 
 export function setupTelegramBot() {
   return authedPost<{ username: string; webhookUrl: string }>('/api/telegram-setup', {});
+}
+
+// Staff accounts (manager only): sign-in account + profile, created or removed together
+export function createStaffAccount(data: { name: string; email: string; password: string; role: User['role']; sectorIds: string[] }) {
+  return authedPost<{ user: User }>('/api/accounts', { action: 'CREATE', ...data });
+}
+
+export function deleteStaffAccount(userId: string) {
+  return authedPost<{ ok: true }>('/api/accounts', { action: 'DELETE', userId });
 }

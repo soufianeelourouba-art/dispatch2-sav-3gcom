@@ -1,5 +1,5 @@
-import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -20,17 +20,3 @@ export const db = initializeFirestore(
   { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
   firebaseConfig.firestoreDatabaseId || '(default)'
 );
-
-// Creates a Firebase Auth account without signing out the current manager:
-// the client SDK signs in the newly created user, so it is done on a throwaway app instance.
-export async function createAuthAccount(email: string, password: string): Promise<string> {
-  const secondary = initializeApp(firebaseConfig, `account-creation-${Date.now()}`);
-  try {
-    const secondaryAuth = getAuth(secondary);
-    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-    await signOut(secondaryAuth);
-    return cred.user.uid;
-  } finally {
-    await deleteApp(secondary);
-  }
-}
