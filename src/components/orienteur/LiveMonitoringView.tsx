@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Ticket, User } from '../../types';
 import { store } from '../../services/storage';
-import { formatCasablancaDateTime, formatCasablancaTimeOnly, formatSLADisplay } from '../../domain/format';
+import { formatCasablancaDateTime, formatCasablancaTimeOnly, formatSLADisplay, formatRdvDate } from '../../domain/format';
 import { exportTicketsToExcel } from '../../services/excelExporter';
 import { LitigeResolutionModal } from './LitigeResolutionModal';
 import { SplitterBadge, ManualTicketBadge, NfSummary, SuspendedNotice, ImportOutcomeBadge } from '../tickets/TicketBadges';
@@ -228,7 +228,7 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({ currentU
                     {ticket.currentStatus === 'LITIGE' && (
                       <div className="text-xs text-rose-800">
                         <b>{ticket.lastLitigeReasonLabel}</b>
-                        {ticket.lastLitigeRdvDate && ` · RDV ${formatCasablancaDateTime(ticket.lastLitigeRdvDate)}`}
+                        {ticket.lastLitigeRdvDate && ` · RDV ${formatRdvDate(ticket.lastLitigeRdvDate)}`}
                         {ticket.lastLitigeNeedsContact && <span className="ml-1.5 font-bold text-blue-800 bg-blue-100 px-1.5 rounded">📞 Nouveau numéro demandé</span>}
                         {ticket.lastLitigeNotes && <span className="italic"> · « {ticket.lastLitigeNotes} »</span>}
                       </div>

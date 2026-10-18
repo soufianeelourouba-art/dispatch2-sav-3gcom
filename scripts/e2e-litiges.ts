@@ -66,33 +66,35 @@ try {
   }
   const day = rdvDayOptions()[1]; // tomorrow
 
-  // 1. RDV with day + slot buttons
+  // 1. RDV → « غدا » : one tap, tomorrow without time
   await press(`lit:${tid(1)}`);
-  check('Litige : la liste des motifs s\'affiche', lastKeyboard().some((b: any) => b.callback_data === `lr:${reasonIndex('RDV')}:${tid(1)}`));
+  check('Litige : motifs en arabe / courts (لا يجيب, RDV, GC, مشكل آخر, Hors Zone)',
+    ['لا يجيب', 'RDV', 'GC', 'مشكل آخر', 'Hors Zone'].every(label => lastKeyboard().some((b: any) => b.text === label)), lastKeyboard().map((b: any) => b.text));
   await press(`lr:${reasonIndex('RDV')}:${tid(1)}`);
-  check('RDV : choix du jour (demain proposé)', lastKeyboard().some((b: any) => b.callback_data === `rd:${day.code}:${tid(1)}`), lastKeyboard());
-  await press(`rd:${day.code}:${tid(1)}`);
-  check('RDV : choix du créneau', lastKeyboard().some((b: any) => b.callback_data === `rs:${day.code}:3:${tid(1)}`));
-  await press(`rs:${day.code}:3:${tid(1)}`);
+  check('RDV : deux boutons « غدا » et « تاريخ آخر »',
+    lastKeyboard().some((b: any) => b.callback_data === `rdt:${tid(1)}` && b.text.includes('غدا'))
+    && lastKeyboard().some((b: any) => b.callback_data === `rdx:${tid(1)}` && b.text.includes('تاريخ آخر')), lastKeyboard());
+  await press(`rdt:${tid(1)}`);
   const t1 = await read(1);
-  check(`RDV enregistré demain à ${RDV_SLOTS[3]}`, t1.currentStatus === 'LITIGE' && t1.lastLitigeReasonCode === 'RDV' && t1.lastLitigeRdvDate?.endsWith('T14:00:00.000Z'), t1.lastLitigeRdvDate);
+  check('« غدا » : RDV enregistré demain, sans heure', t1.currentStatus === 'LITIGE' && t1.lastLitigeReasonCode === 'RDV'
+    && t1.lastLitigeRdvDate?.startsWith(`20${day.code.slice(0, 2)}-${day.code.slice(2, 4)}-${day.code.slice(4, 6)}T00:00`), t1.lastLitigeRdvDate);
+  check('Message de confirmation en arabe', telegramCalls.some(c => c.method === 'sendMessage' && /تم تسجيل Litige/.test(c.body.text)));
 
-  // 2. Client unreachable + request for another number
+  // 2. « لا يجيب » : one tap, recorded at once
   await press(`lr:${reasonIndex('CLIENT_UNREACHABLE')}:${tid(2)}`);
-  check('Injoignable : bouton « Demander un autre numéro »', lastKeyboard().some((b: any) => b.callback_data === `ln:1:${tid(2)}`));
-  await press(`ln:1:${tid(2)}`);
   const t2 = await read(2);
-  check('Demande de nouveau numéro enregistrée', t2.currentStatus === 'LITIGE' && t2.lastLitigeNeedsContact === true, t2);
+  check('« لا يجيب » : enregistré directement, sans sous-menu', t2.currentStatus === 'LITIGE' && t2.lastLitigeReasonCode === 'CLIENT_UNREACHABLE', t2);
 
-  // 3. RDV typed: unreadable text asks again, readable text is recorded
+  // 3. RDV → « تاريخ آخر » : free text kept as is (date read when possible)
   await press(`rdx:${tid(3)}`);
-  const callsBefore = telegramCalls.length;
-  await say('demain matin');
-  check('Date incomprise : la question est reposée', (await read(3)).currentStatus === 'ASSIGNED'
-    && telegramCalls.slice(callsBefore).some(c => c.method === 'sendMessage' && /pas compris/.test(c.body.text)));
-  await say('25/12 15h30');
+  await say('الأحد بعد الظهر');
   const t3 = await read(3);
-  check('Date tapée enregistrée (25/12 à 15h30)', t3.currentStatus === 'LITIGE' && /-12-25T15:30:00\.000Z$/.test(t3.lastLitigeRdvDate || ''), t3.lastLitigeRdvDate);
+  check('« تاريخ آخر » : texte libre enregistré', t3.currentStatus === 'LITIGE' && t3.lastLitigeReasonCode === 'RDV' && t3.lastLitigeNotes === 'الأحد بعد الظهر', t3);
+  await db.doc(`tickets/${tid(7)}`).set({ ...(await read(4)), id: tid(7), ticketNumber: `${ID}-7` });
+  await press(`rdx:${tid(7)}`);
+  await say('25/12 15h30');
+  const t7 = await read(7);
+  check('« تاريخ آخر » : date tapée reconnue (25/12 à 15h30)', t7.currentStatus === 'LITIGE' && /-12-25T15:30:00\.000Z$/.test(t7.lastLitigeRdvDate || ''), t7.lastLitigeRdvDate);
 
   // 4. Other reason with a typed detail
   await press(`lr:${reasonIndex('AUTRE')}:${tid(4)}`);
@@ -115,7 +117,7 @@ try {
   const callsBeforeOld = telegramCalls.length;
   await press(`nfs:${tid(1)}`);
   check('Suspendu : un ancien bouton NF est refusé', (await read(1)).currentStatus === 'SUSPENDED'
-    && telegramCalls.slice(callsBeforeOld).some(c => c.method === 'sendMessage' && /suspendu/.test(c.body.text)));
+    && telegramCalls.slice(callsBeforeOld).some(c => c.method === 'sendMessage' && /موقوف/.test(c.body.text)));
   const app = await (await portalGet()).json() as any;
   check('Suspendu : visible dans « En attente » de l\'app technicien', app.onHold?.some((t: any) => t.id === tid(1) && t.lastLitigeRdvDate), app.onHold);
   await orienteurEvent(1, 'LITIGE_REOPENED', { dispatcherUpdateNotes: 'Appeler le fils du client', newClientPhone: '0677889900' });
@@ -126,14 +128,14 @@ try {
   const callsBeforeList = telegramCalls.length;
   await say('/tickets');
   const sent = telegramCalls.slice(callsBeforeList).filter(c => c.method === 'sendMessage').map(c => c.body.text as string);
-  check('/tickets : résumé avec le nombre de hors délai', /intervention\(s\) en cours/.test(sent[0]) && /1 hors délai/.test(sent[0]), sent[0]);
+  check('/tickets : résumé avec le nombre de hors délai', /تدخلات جارية/.test(sent[0]) && /1 hors délai/.test(sent[0]), sent[0]);
   const lateOrder = sent.find(t => t.includes(`${ID}-6`)) || '';
   check('Ordre hors délai : « HORS DÉLAI » en tête du message', lateOrder.indexOf('HORS DÉLAI') > -1 && lateOrder.indexOf('HORS DÉLAI') < lateOrder.indexOf(`${ID}-6`), lateOrder);
   check('/tickets : le hors délai est envoyé en premier', sent.findIndex(t => t.includes(`${ID}-6`)) === 1, sent.map(t => t.slice(0, 40)));
   const relance = sent.find(t => t.includes(`${ID}-1`)) || '';
-  check('Relance : « RETOUR DE L’ORIENTEUR », nouveau numéro, ancien barré, consigne',
-    relance.startsWith("↩️ <b>RETOUR DE L'ORIENTEUR</b>") && relance.includes('👉 <b>+212 677 88 99 00</b>')
-    && relance.includes('<s>Ancien : +212 661 22 33 44</s>') && relance.includes('« Appeler le fils du client »'), relance);
+  check('Relance : « رجوع من المنسق », nouveau numéro, ancien barré, consigne',
+    relance.startsWith('↩️ <b>رجوع من المنسق (orienteur)</b>') && relance.includes('👉 <b>+212 677 88 99 00</b>')
+    && relance.includes('<s>الرقم القديم : +212 661 22 33 44</s>') && relance.includes('« Appeler le fils du client »'), relance);
   const appRelance = ((await (await portalGet()).json()) as any).tickets.find((t: any) => t.id === tid(1));
   check('App technicien : nouveau et ancien numéro de la relance', appRelance?.reopenedWithNewPhone === '0677889900' && appRelance?.previousClientPhone === '0661223344', appRelance);
 
@@ -168,7 +170,7 @@ try {
 } finally {
   const refs = [
     ...(await db.collection('events').where('sectorId', '==', SECTOR).get()).docs.map(d => d.ref),
-    ...[1, 2, 3, 4, 5, 6].flatMap(n => [db.doc(`tickets/${tid(n)}`), db.doc(`telegramMessages/${tid(n)}`)]),
+    ...[1, 2, 3, 4, 5, 6, 7].flatMap(n => [db.doc(`tickets/${tid(n)}`), db.doc(`telegramMessages/${tid(n)}`)]),
     db.doc(`telegramSessions/${CHAT}`), db.doc(`technicians/${TECH}`), db.doc(`sectors/${SECTOR}`),
   ];
   const batch = db.batch();

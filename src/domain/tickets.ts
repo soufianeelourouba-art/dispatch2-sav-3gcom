@@ -1,7 +1,7 @@
 // Pure ticket rules, shared by the browser (storage.ts) and the server (api/).
 // No Firebase or browser imports here.
 import type { ManualTicketNature, SLAStatus, SumCheckResult, Ticket, TicketEvent, TicketStatus } from '../types';
-import { MANUAL_TICKET_NATURES } from '../types/index.js';
+import { LITIGE_REASONS, MANUAL_TICKET_NATURES } from '../types/index.js';
 import { formatPhonesIntl } from './litiges.js';
 import { formatCasablancaDateTime, formatSLADisplay } from './format.js';
 
@@ -152,36 +152,41 @@ export function formatSlaBanner(registeredAt: string | undefined, now: number = 
   return `🟢 Délai : reste ${text} (avant le ${due})\n`;
 }
 
+// Technician-facing texts are in simple Arabic; the ticket data (client, phone, address, zone,
+// ticket number) and the deadline lines stay in French, as on the operator's files.
+const techLitigeLabel = (ticket: Ticket) =>
+  LITIGE_REASONS.find(r => r.code === ticket.lastLitigeReasonCode)?.techLabel || ticket.lastLitigeReasonLabel || '';
+
 // Work order sent to the technician on Telegram (HTML parse mode).
 // Separators are kept short so they never wrap on a phone screen.
 export function formatTicketMessage(ticket: Ticket, now: number = Date.now()): string {
   let historyBanner = '';
   if (ticket.importOutcome === 'REPRISE') {
-    historyBanner = `\n\n🔁 <b>REPRISE</b> : le client a de nouveau réclamé après l'intervention` +
-      (ticket.completedAt ? ` du ${escapeHtml(formatCasablancaDateTime(ticket.completedAt))}` : '') +
-      `.\n<i>Reprise de votre intervention : non facturable.</i>`;
+    historyBanner = `\n\n🔁 <b>REPRISE</b> : الزبون اشتكى من جديد بعد التدخل` +
+      (ticket.completedAt ? ` (${escapeHtml(formatCasablancaDateTime(ticket.completedAt))})` : '') +
+      `.\n<i>إعادة لتدخلك : بدون مقابل.</i>`;
   } else if (ticket.importOutcome === 'RETOUR_CLIENT') {
-    historyBanner = `\n\n↩️ <b>RETOUR CLIENT</b> : ticket de nouveau réclamé.\n` +
-      `• Litige précédent : ${escapeHtml(ticket.lastLitigeReasonLabel || 'Non précisé')}`;
+    historyBanner = `\n\n↩️ <b>RETOUR CLIENT</b> : الزبون طلب التدخل من جديد.\n` +
+      `• النزاع السابق : ${escapeHtml(techLitigeLabel(ticket) || '—')}`;
   } else if (ticket.visitCount > 1) {
-    historyBanner = `\n\n⚠️ <b>NOUVELLE RÉCLAMATION</b> (visite n°${ticket.visitCount})` +
-      (ticket.lastVisitedTechName ? `\n• Ancien technicien : ${escapeHtml(ticket.lastVisitedTechName)}` : '');
+    historyBanner = `\n\n⚠️ <b>شكاية جديدة</b> (الزيارة رقم ${ticket.visitCount})` +
+      (ticket.lastVisitedTechName ? `\n• التقني السابق : ${escapeHtml(ticket.lastVisitedTechName)}` : '');
   }
 
   let reopenBanner = '';
   if (ticket.lastDispatcherUpdateNotes) {
-    reopenBanner = `\n\n🔄 <b>MISE À JOUR DE L'ORIENTEUR :</b>\n` +
-      `"${escapeHtml(ticket.lastDispatcherUpdateNotes)}"\n` +
-      (ticket.reopenedWithNewPhone ? `📞 Nouveau contact : <b>${escapeHtml(ticket.reopenedWithNewPhone)}</b>\n` : '');
+    reopenBanner = `\n\n💬 <b>ملاحظة المنسق :</b>\n` +
+      `« ${escapeHtml(ticket.lastDispatcherUpdateNotes)} »` +
+      (ticket.reopenedWithNewPhone ? `\n📞 رقم جديد : <b>${escapeHtml(formatPhonesIntl(ticket.reopenedWithNewPhone))}</b>` : '');
   }
 
   const manualBanner = ticket.origin === 'MANUAL'
-    ? `🛠 <b>${escapeHtml(manualNatureLabel(ticket.manualNature).toUpperCase())}</b> (hors ticket opérateur)\n` +
+    ? `🛠 <b>${escapeHtml(manualNatureLabel(ticket.manualNature).toUpperCase())}</b> (بدون تذكرة من اتصالات المغرب)\n` +
       (ticket.description ? `📝 ${escapeHtml(ticket.description)}\n` : '')
     : '';
 
   return (
-    `🚨 <b>INTERVENTION FIBRE OPTIQUE 3GCOM</b>\n` +
+    `🚨 <b>تدخل جديد — 3GCOM</b>\n` +
     `━━━━━━━━━━━━━━\n` +
     formatSlaBanner(ticket.registeredAt, now) +
     manualBanner +
@@ -194,7 +199,7 @@ export function formatTicketMessage(ticket: Ticket, now: number = Date.now()): s
     historyBanner +
     reopenBanner +
     `\n━━━━━━━━━━━━━━\n` +
-    `<i>Répondez avec l'un des boutons ci-dessous.</i>`
+    `<i>اختر أحد الأزرار أسفله.</i>`
   );
 }
 
@@ -203,27 +208,28 @@ export function formatTicketMessage(ticket: Ticket, now: number = Date.now()): s
 // ticket. Phone numbers are tappable in Telegram.
 export function formatRelanceMessage(ticket: Ticket, now: number = Date.now()): string {
   const newPhone = ticket.reopenedWithNewPhone;
-  const litigeDate = ticket.lastVisitedAt ? ` (le ${escapeHtml(formatCasablancaDateTime(ticket.lastVisitedAt))})` : '';
+  const litigeDate = ticket.lastVisitedAt ? ` (${escapeHtml(formatCasablancaDateTime(ticket.lastVisitedAt))})` : '';
+  const litige = techLitigeLabel(ticket);
   return (
-    `↩️ <b>RETOUR DE L'ORIENTEUR</b>\n` +
-    `<b>Ticket ${escapeHtml(ticket.ticketNumber)}</b> : à reprendre\n` +
+    `↩️ <b>رجوع من المنسق (orienteur)</b>\n` +
+    `<b>Ticket ${escapeHtml(ticket.ticketNumber)}</b> : أعد التدخل\n` +
     `━━━━━━━━━━━━━━\n` +
     formatSlaBanner(ticket.registeredAt, now) +
     (newPhone
-      ? `\n📞 <b>NOUVEAU NUMÉRO À APPELER</b>\n👉 <b>${escapeHtml(formatPhonesIntl(newPhone))}</b>\n` +
-        (ticket.previousClientPhone ? `<s>Ancien : ${escapeHtml(formatPhonesIntl(ticket.previousClientPhone))}</s>\n` : '')
+      ? `\n📞 <b>رقم جديد للاتصال</b>\n👉 <b>${escapeHtml(formatPhonesIntl(newPhone))}</b>\n` +
+        (ticket.previousClientPhone ? `<s>الرقم القديم : ${escapeHtml(formatPhonesIntl(ticket.previousClientPhone))}</s>\n` : '')
       : '') +
     (ticket.lastDispatcherUpdateNotes
-      ? `\n💬 <b>Consigne de l'orienteur :</b>\n« ${escapeHtml(ticket.lastDispatcherUpdateNotes)} »\n`
+      ? `\n💬 <b>ملاحظة المنسق :</b>\n« ${escapeHtml(ticket.lastDispatcherUpdateNotes)} »\n`
       : '') +
     `━━━━━━━━━━━━━━\n` +
     `👤 ${escapeHtml(ticket.clientName)}\n` +
     (newPhone ? '' : `📞 ${escapeHtml(formatPhonesIntl(ticket.clientPhone))}\n`) +
     `📍 ${escapeHtml(ticket.clientAddress)} · ${escapeHtml(ticket.rawZoneText)}` +
     (ticket.splitterRef ? `\n🔌 Splitter ${escapeHtml(ticket.splitterRef)}` : '') +
-    (ticket.lastLitigeReasonLabel ? `\n❌ Votre litige : ${escapeHtml(ticket.lastLitigeReasonLabel)}${litigeDate}` : '') +
+    (litige ? `\n❌ النزاع السابق : ${escapeHtml(litige)}${litigeDate}` : '') +
     `\n━━━━━━━━━━━━━━\n` +
-    `<i>Répondez avec les boutons ci-dessous.</i>`
+    `<i>اختر أحد الأزرار أسفله.</i>`
   );
 }
 
@@ -239,14 +245,14 @@ export function formatSplitterGroupMessage(splitterRef: string, tickets: Ticket[
     `    📍 ${escapeHtml(t.clientAddress)}`
   );
   return (
-    `🔴 <b>INCIDENT SPLITTER ${escapeHtml(splitterRef)}</b>\n` +
+    `🔴 <b>عطب Splitter ${escapeHtml(splitterRef)}</b>\n` +
     `━━━━━━━━━━━━━━\n` +
     formatSlaBanner(oldest, now) +
-    `👥 <b>${tickets.length} clients impactés</b> · Zone ${escapeHtml(tickets[0]?.rawZoneText)}\n` +
-    `Priorité : un seul problème à résoudre sur le splitter.\n\n` +
+    `👥 <b>${tickets.length} زبناء متضررين</b> · Zone ${escapeHtml(tickets[0]?.rawZoneText)}\n` +
+    `الأولوية : مشكل واحد يجب إصلاحه في الـ Splitter.\n\n` +
     lines.join('\n') +
     `\n━━━━━━━━━━━━━━\n` +
-    `<i>Le compte-rendu (NF ou litige) s'applique aux ${tickets.length} tickets.</i>`
+    `<i>التقرير (NF أو Litige) يُطبَّق على ${tickets.length} تذاكر.</i>`
   );
 }
 

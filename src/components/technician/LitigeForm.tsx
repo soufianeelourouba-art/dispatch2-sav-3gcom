@@ -98,7 +98,7 @@ export const LitigeForm: React.FC<LitigeFormProps> = ({ token, ticket, groupSize
         <div className={title}>Motif</div>
         <div className="grid gap-2">
           {LITIGE_REASONS.map(r => (
-            <Choice key={r.code} selected={reason === r.code} onClick={() => setReason(r.code)}>{r.label}</Choice>
+            <Choice key={r.code} selected={reason === r.code} onClick={() => setReason(r.code)}>{r.techLabel}</Choice>
           ))}
         </div>
       </div>

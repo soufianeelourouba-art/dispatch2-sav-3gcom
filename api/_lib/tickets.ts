@@ -58,11 +58,11 @@ export async function recordTechnicianReport(
 
   return db.runTransaction(async tx => {
     const ticketSnap = await tx.get(ticketRef);
-    if (!ticketSnap.exists) throw new AccessError('Ticket introuvable.');
+    if (!ticketSnap.exists) throw new AccessError('Ticket غير موجود.');
     const ticket = { ...(ticketSnap.data() as Ticket), id: ticketSnap.id };
-    if (ticket.currentAssignedTechId !== tech.id) throw new AccessError('Ce ticket ne vous est plus affecté.');
-    if (ticket.isClosed) throw new AccessError('Ce ticket est déjà clôturé.');
-    if (ticket.currentStatus === 'SUSPENDED') throw new AccessError('Ce ticket est suspendu par l’orienteur : attendez sa relance.');
+    if (ticket.currentAssignedTechId !== tech.id) throw new AccessError('هذا Ticket لم يعد مسندا إليك.');
+    if (ticket.isClosed) throw new AccessError('هذا Ticket مغلق من قبل.');
+    if (ticket.currentStatus === 'SUSPENDED') throw new AccessError('هذا Ticket موقوف من طرف المنسق : انتظر إعادة إرساله.');
 
     const eventsSnap = await tx.get(db.collection('events').where('ticketId', '==', ticketId));
     const events = eventsSnap.docs.map(d => d.data() as TicketEvent);
@@ -114,8 +114,8 @@ export async function recordTechnicianReport(
 export const workOrderButtons = (ticketId: string, group = false) => {
   const p = group ? 'g.' : '';
   return [[
-    { text: group ? '🟢 NF splitter (tous)' : '🟢 NF (Normalisé)', callback_data: `${p}nf:${ticketId}` },
-    { text: group ? '🔴 Litige splitter (tous)' : '🔴 Litige (LC)', callback_data: `${p}lit:${ticketId}` },
+    { text: group ? '🟢 NF (كل الـ Splitter)' : '🟢 NF', callback_data: `${p}nf:${ticketId}` },
+    { text: group ? '🔴 Litige (كل الـ Splitter)' : '🔴 Litige', callback_data: `${p}lit:${ticketId}` },
   ]];
 };
 
@@ -136,10 +136,10 @@ export async function recordSplitterReport(
   leadExtra: Partial<Ticket> = {}
 ): Promise<Ticket[]> {
   const snap = await adminDb().collection('tickets').doc(ticketId).get();
-  if (!snap.exists) throw new AccessError('Ticket introuvable.');
+  if (!snap.exists) throw new AccessError('Ticket غير موجود.');
   const ticket = { ...(snap.data() as Ticket), id: snap.id };
   const siblings = ticket.splitterRef ? await splitterSiblings(tech, ticket) : [ticket];
-  if (siblings.length === 0) throw new AccessError('Aucun ticket ouvert sur ce splitter ne vous est affecté.');
+  if (siblings.length === 0) throw new AccessError('لا يوجد Ticket مفتوح مسند إليك على هذا الـ Splitter.');
 
   const notes = ticket.splitterRef && siblings.length > 1
     ? `${report.notes ? report.notes + ' — ' : ''}Compte-rendu collectif splitter ${ticket.splitterRef} (${siblings.length} tickets).`
@@ -157,7 +157,7 @@ export async function recordSplitterReport(
       if (!(err instanceof AccessError)) throw err; // a sibling closed meanwhile: skip it
     }
   }
-  if (updated.length === 0) throw new AccessError('Ces tickets ne vous sont plus affectés ou sont déjà clôturés.');
+  if (updated.length === 0) throw new AccessError('هذه التذاكر لم تعد مسندة إليك أو مغلقة من قبل.');
   return updated;
 }
 

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Ticket, Technician, User } from '../../types';
 import { store } from '../../services/storage';
-import { formatCasablancaDateTime, formatSLADisplay } from '../../domain/format';
+import { formatCasablancaDateTime, formatSLADisplay, formatRdvDate } from '../../domain/format';
 import { calculateDispatchProposals } from '../../services/dispatchEngine';
 import { telegramGateway } from '../../services/telegramSimulator';
 import { LitigeResolutionModal } from './LitigeResolutionModal';
@@ -541,7 +541,7 @@ const DispatchRow: React.FC<{
 
         {ticket.currentStatus === 'LITIGE' && (
           <div className="flex flex-wrap items-center gap-2 text-xs bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5">
-            <span className="text-rose-900"><b>Litige :</b> {ticket.lastLitigeReasonLabel}{ticket.lastLitigeRdvDate && ` · RDV ${formatCasablancaDateTime(ticket.lastLitigeRdvDate)}`}</span>
+            <span className="text-rose-900"><b>Litige :</b> {ticket.lastLitigeReasonLabel}{ticket.lastLitigeRdvDate && ` · RDV ${formatRdvDate(ticket.lastLitigeRdvDate)}`}</span>
             {ticket.lastLitigeNeedsContact && <span className="font-bold text-blue-800 bg-blue-100 px-1.5 rounded">📞 Nouveau numéro demandé</span>}
             {ticket.lastLitigeNotes && <span className="italic text-rose-800">« {ticket.lastLitigeNotes} »</span>}
           </div>

@@ -116,9 +116,10 @@ export function validateDeclaration(input: DeclarationInput): string[] {
 // NF "config centrale": the ONT serial number and a photo of its label are required.
 export function validateConfigNf(serial: string | undefined, serialPhotoCount: number): string[] {
   const errors: string[] = [];
-  if (!serial || !isValidSerial(serial)) errors.push('Saisissez le numéro de série de l\'ONT (8 à 24 lettres ou chiffres).');
-  if (serialPhotoCount < 1) errors.push('Prenez la photo de l\'étiquette du numéro de série.');
-  if (serialPhotoCount > LIMITS.photosPerKind) errors.push(`${LIMITS.photosPerKind} photos maximum.`);
+  // Shown to the technician in the NF Config form: Arabic, technical words in French
+  if (!serial || !isValidSerial(serial)) errors.push('أدخل N° série ONT (من 8 إلى 24 حرفا أو رقما).');
+  if (serialPhotoCount < 1) errors.push('التقط صورة ملصق N° série.');
+  if (serialPhotoCount > LIMITS.photosPerKind) errors.push(`${LIMITS.photosPerKind} صور كحد أقصى.`);
   return errors;
 }
 

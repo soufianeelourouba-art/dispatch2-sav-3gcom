@@ -3,7 +3,7 @@ import { Ticket, MANUAL_TICKET_NATURES } from '../../types';
 import { Cable, Wrench } from 'lucide-react';
 import { describeMaterials, hasMaterials, prestationLabel } from '../../domain/prestations';
 import { rdvProximity } from '../../domain/litiges';
-import { formatCasablancaDateTime } from '../../domain/format';
+import { formatCasablancaDateTime, formatRdvDate } from '../../domain/format';
 
 // "Splitter SP-12 · 4 tickets": highlighted when several open tickets share the splitter.
 export const SplitterBadge: React.FC<{ ticket: Ticket; groupSize?: number }> = ({ ticket, groupSize = 1 }) => {
@@ -70,7 +70,7 @@ export const SuspendedNotice: React.FC<{ ticket: Ticket; onRelaunch: () => void 
         <div><b>⏸ Suspendu</b> · motif validé : {ticket.lastLitigeReasonLabel || 'Litige'}</div>
         {ticket.lastLitigeRdvDate && (
           <span className={`inline-block font-semibold px-1.5 py-0.5 rounded ${rdvStyle}`}>
-            📅 {rdvLabel} : {formatCasablancaDateTime(ticket.lastLitigeRdvDate)}
+            📅 {rdvLabel} : {formatRdvDate(ticket.lastLitigeRdvDate)}
           </span>
         )}
       </div>

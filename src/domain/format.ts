@@ -40,3 +40,9 @@ export function formatCasablancaDateTime(utcIsoString: string | undefined): stri
 export function formatCasablancaTimeOnly(utcIsoString: string | undefined): string {
   return formatMorocco(utcIsoString, timeFormatter);
 }
+
+// RDV date: "demain" recorded by the technician has no time (stored at 00:00 Morocco): date only
+export function formatRdvDate(utcIsoString: string | undefined): string {
+  const full = formatCasablancaDateTime(utcIsoString);
+  return full.endsWith(' 00:00') ? full.slice(0, -6) : full;
+}

@@ -40,28 +40,23 @@ await page.getByText('À faire').first().waitFor();
 await shot('1-a-faire');
 
 await page.getByRole('button', { name: 'NF', exact: true }).first().click();
-await page.getByRole('button', { name: '⚙️ NF config centrale' }).click();
-await page.getByRole('button', { name: '01-02 FO' }).click();
-await page.getByRole('button', { name: 'Oui, j\'ai posé du matériel' }).click();
-await page.getByRole('button', { name: 'Plus', exact: true }).first().click();
-// Viewport screenshots while scrolling (full-page captures misplace sticky/fixed bars)
+await page.getByRole('button', { name: '⚙️ NF Config' }).click();
+// Viewport screenshots (full-page captures misplace sticky/fixed bars)
 await page.evaluate(() => window.scrollTo(0, 0));
-await shot('2a-formulaire-haut');
-await page.getByText('Matériel installé').scrollIntoViewIfNeeded();
-await shot('2b-formulaire-materiel');
+await shot('2a-formulaire-nf-config');
 
-await page.getByRole('button', { name: 'Valider la NF' }).click();
+await page.getByRole('button', { name: 'تأكيد NF' }).click();
 await page.waitForTimeout(400);
 await shot('3-erreurs');
 
-await page.getByRole('button', { name: 'Retour' }).click();
+await page.getByRole('button', { name: 'رجوع' }).click();
 await page.getByRole('button', { name: 'Litige', exact: true }).first().click();
-await page.getByRole('button', { name: 'Rendez-vous convenu (RDV)' }).click();
+await page.getByRole('button', { name: 'RDV', exact: true }).click();
 await page.getByRole('button', { name: /^Demain/ }).click();
 await page.getByRole('button', { name: '14h', exact: true }).click();
 await page.getByText('Heure', { exact: true }).scrollIntoViewIfNeeded();
 await shot('6-litige-rdv');
-await page.getByRole('button', { name: 'Client injoignable' }).click();
+await page.getByRole('button', { name: 'لا يجيب' }).click();
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot('7-litige-injoignable');
 await page.getByRole('button', { name: 'Retour' }).click();

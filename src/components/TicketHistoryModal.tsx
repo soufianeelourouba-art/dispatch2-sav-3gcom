@@ -1,7 +1,7 @@
 import React from 'react';
 import { Ticket, TicketEvent } from '../types';
 import { store } from '../services/storage';
-import { formatCasablancaDateTime } from '../domain/format';
+import { formatCasablancaDateTime, formatRdvDate } from '../domain/format';
 import { PrestationPanel } from './tickets/PrestationPanel';
 import { 
   X, 
@@ -155,7 +155,7 @@ export const TicketHistoryModal: React.FC<TicketHistoryModalProps> = ({ ticket, 
                         {evt.rdvDateTime && (
                           <div className="text-[11px] flex items-center gap-1 text-amber-800 font-medium">
                             <Calendar className="w-3 h-3 text-amber-600" />
-                            <span>Rendez-vous convenu : <b>{formatCasablancaDateTime(evt.rdvDateTime)}</b></span>
+                            <span>Rendez-vous convenu : <b>{formatRdvDate(evt.rdvDateTime)}</b></span>
                           </div>
                         )}
                       </div>

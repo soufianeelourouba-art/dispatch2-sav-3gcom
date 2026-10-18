@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MANUAL_TICKET_NATURES } from '../../types';
 import { describeMaterials, prestationLabel, PRESTATIONS, type PrestationDeclaration } from '../../domain/prestations';
-import { formatCasablancaDateTime, formatSLADisplay } from '../../domain/format';
+import { formatCasablancaDateTime, formatSLADisplay, formatRdvDate } from '../../domain/format';
 import { computeTicketSLA } from '../../domain/tickets';
 import { formatPhoneIntl, formatPhonesIntl } from '../../domain/litiges';
 import { ReportForm, type FormTicket } from './ReportForm';
@@ -228,7 +228,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({ 
         {screen.kind === 'success' && (
           <div className="bg-white rounded-2xl border border-emerald-200 p-6 text-center space-y-4 mt-6">
             <CheckCircle2 className="w-14 h-14 text-emerald-600 mx-auto" />
-            <p className="text-base font-semibold text-slate-800">{screen.message}</p>
+            <p dir="auto" className="text-base font-semibold text-slate-800">{screen.message}</p>
             <div className="flex flex-col gap-2">
               {openedFromDeepLink && insideTelegram() && (
                 <button onClick={() => telegramApp()?.close()} className="h-12 rounded-xl bg-brand-navy-900 text-white font-bold">Fermer</button>
@@ -275,7 +275,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({ 
                   <span className="text-[11px] font-semibold bg-slate-200 rounded-full px-2 py-0.5">{t.lastLitigeReasonLabel || 'Litige'}</span>
                 </div>
                 <div>{t.clientName}</div>
-                {t.lastLitigeRdvDate && <div className="font-semibold text-slate-900">📅 RDV le {formatCasablancaDateTime(t.lastLitigeRdvDate)}</div>}
+                {t.lastLitigeRdvDate && <div className="font-semibold text-slate-900">📅 RDV le {formatRdvDate(t.lastLitigeRdvDate)}</div>}
                 <div className="text-[11px] text-slate-500 mt-1">Il reviendra dans « À faire » quand l'orienteur le relancera.</div>
               </div>
             ))}

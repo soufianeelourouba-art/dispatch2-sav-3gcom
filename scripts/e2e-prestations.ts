@@ -50,7 +50,7 @@ try {
   check('Mon espace : 3 interventions à faire', r.status === 200 && r.data.tickets.length === 3, r.data);
 
   r = await call('POST', { action: 'NF_FORM', ticketId: `tkt-${ID}-1`, nfType: 'CENTRAL_CONFIG' });
-  check('NF config sans numéro de série → refusée', r.status === 400 && /numéro de série/.test(r.data.error), r);
+  check('NF config sans numéro de série → refusée', r.status === 400 && /N° série ONT/.test(r.data.error), r);
   check('… et le ticket reste ouvert', (await read(1)).isClosed === false);
 
   r = await call('POST', {

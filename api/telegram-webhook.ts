@@ -22,14 +22,15 @@ import { technicianPrestations } from './_lib/prestations.js';
 import { afterTechnicianReport } from './_lib/afterReport.js';
 import { appBaseUrl, configNfButton, declareButton, setTechnicianMenu, technicianAppUrl, webAppButton } from './_lib/miniapp.js';
 import { LITIGE_REASONS } from '../src/types/index.js';
-import { RDV_SLOTS, dayLabel, parseRdvText, rdvDayOptions, rdvToIso } from '../src/domain/litiges.js';
-import { formatCasablancaDateTime } from '../src/domain/format.js';
+import { RDV_SLOTS, dayCode, dayLabel, parseRdvText, rdvToIso } from '../src/domain/litiges.js';
+import { formatRdvDate } from '../src/domain/format.js';
 import { computeTicketSLA } from '../src/domain/tickets.js';
 import type { Technician } from '../src/types/index.js';
 
 // Questions asked when a litige needs typed information (the answer comes as a message).
 // RDV_DATE: date + time typed ("autre date"); RDV_TIME: time typed for a chosen day.
-type SessionStep = 'RDV_DATE' | 'RDV_TIME' | 'DETAIL';
+// RDV_FREE: "تاريخ آخر", free text kept as is (a date is read from it when possible).
+type SessionStep = 'RDV_DATE' | 'RDV_TIME' | 'RDV_FREE' | 'DETAIL';
 interface LitigeSession {
   ticketId: string;
   reasonCode: 'RDV' | 'AUTRE';
@@ -38,9 +39,10 @@ interface LitigeSession {
   day?: string; // RDV_TIME: chosen day code
 }
 const QUESTIONS: Record<SessionStep, string> = {
-  RDV_DATE: '📅 Indiquez la <b>date et l\'heure du RDV</b> (ex : <code>18/10 14h30</code>) :',
-  RDV_TIME: '🕐 Indiquez l\'<b>heure du RDV</b> (ex : <code>15h30</code>) :',
-  DETAIL: '✍️ Décrivez brièvement le <b>motif du litige</b> :',
+  RDV_DATE: '📅 اكتب <b>تاريخ وساعة الـ RDV</b> (مثال : <code>18/10 14h30</code>) :',
+  RDV_TIME: '🕐 اكتب <b>ساعة الـ RDV</b> (مثال : <code>15h30</code>) :',
+  RDV_FREE: '📅 اكتب <b>موعد الـ RDV</b> كما اتفقت مع الزبون (مثال : <code>20/10 15h</code>) :',
+  DETAIL: '✍️ اشرح <b>المشكل</b> باختصار :',
 };
 
 const sessions = () => adminDb().collection('telegramSessions');
@@ -50,14 +52,8 @@ async function ask(chatId: string, session: LitigeSession) {
   return askForReply(chatId, QUESTIONS[session.step!]);
 }
 
-// Litige buttons, "g." prefix = whole splitter incident
-function rdvDayButtons(p: string, ticketId: string) {
-  return [
-    ...rdvDayOptions().map(d => [{ text: `📅 ${d.label}`, callback_data: `${p}rd:${d.code}:${ticketId}` }]),
-    [{ text: '📅 Autre date', callback_data: `${p}rdx:${ticketId}` }],
-    [{ text: '↩️ Retour', callback_data: `${p}lit:${ticketId}` }],
-  ];
-}
+// Time slots of a chosen day: only reached from messages sent by the former version ("g." prefix
+// = whole splitter incident)
 function rdvSlotButtons(p: string, day: string, ticketId: string) {
   const slots = RDV_SLOTS.map((s, i) => ({ text: s.replace(':00', 'h'), callback_data: `${p}rs:${day}:${i}:${ticketId}` }));
   return [
@@ -97,10 +93,10 @@ async function onMessage(base: string, message: any) {
   const tech = await findTechnicianByChat(chatId);
   if (!tech) {
     return sendMessage(chatId,
-      '👋 Bienvenue sur le bot 3GCOM Dispatch.\nPour lier votre compte technicien, ouvrez le lien d\'activation personnel envoyé par votre superviseur.');
+      '👋 مرحبا بك في 3GCOM Dispatch.\nلربط حسابك، افتح رابط التفعيل الشخصي الذي أرسله لك المسؤول.');
   }
   if (technicianIsBlocked(tech)) {
-    return sendMessage(chatId, '🚫 Votre accès a été suspendu par votre superviseur.');
+    return sendMessage(chatId, '🚫 تم إيقاف حسابك من طرف المسؤول.');
   }
 
   // Typed answer to a pending litige question
@@ -112,10 +108,15 @@ async function onMessage(base: string, message: any) {
       await sessions().doc(chatId).delete();
       return report(base, chatId, tech, session.ticketId, !!session.group, { kind: 'LITIGE', reasonCode: 'AUTRE', notes: text });
     }
+    if (step === 'RDV_FREE') {
+      await sessions().doc(chatId).delete();
+      return report(base, chatId, tech, session.ticketId, !!session.group,
+        { kind: 'LITIGE', reasonCode: 'RDV', rdvDateTime: parseRdvText(text) || undefined, notes: text });
+    }
     const rdv = step === 'RDV_TIME' ? rdvToIso(session.day || '', text.replace(/\s/g, '').replace(/h$/i, 'h00')) : parseRdvText(text);
     if (!rdv) {
       // Not understood: ask again instead of recording an unusable date
-      return askForReply(chatId, `⚠️ Je n'ai pas compris « ${text} ».\n${QUESTIONS[step]}`);
+      return askForReply(chatId, `⚠️ لم أفهم « ${text} ».\n${QUESTIONS[step]}`);
     }
     await sessions().doc(chatId).delete();
     return report(base, chatId, tech, session.ticketId, !!session.group, { kind: 'LITIGE', reasonCode: 'RDV', rdvDateTime: rdv });
@@ -126,16 +127,16 @@ async function onMessage(base: string, message: any) {
     await setTechnicianMenu(base, tech).catch(() => {});
     return listTickets(chatId, tech);
   }
-  return sendMessage(chatId, 'Utilisez les boutons sous chaque ordre de travail, ou le bouton <b>Menu</b> : /tickets, /a_declarer, « Mon espace ».');
+  return sendMessage(chatId, 'استعمل الأزرار تحت كل تدخل، أو زر <b>Menu</b> : /tickets، /a_declarer، « Mon espace ».');
 }
 
 async function activate(base: string, chatId: string, token: string, from: any) {
   const tech = await findTechnicianByToken(token);
   if (!tech) {
-    return sendMessage(chatId, '⚠️ Lien d\'activation non reconnu ou réinitialisé.\nDemandez un nouveau lien à votre superviseur.');
+    return sendMessage(chatId, '⚠️ رابط التفعيل غير صالح.\nاطلب رابطا جديدا من المسؤول.');
   }
   if (tech.telegramLinkDisabled || tech.telegramActivationStatus === 'REVOKED') {
-    return sendMessage(chatId, '🚫 Ce lien d\'activation a été suspendu par votre superviseur.');
+    return sendMessage(chatId, '🚫 تم إيقاف رابط التفعيل من طرف المسؤول.');
   }
   const username = from?.username ? `@${from.username}` : undefined;
   await adminDb().collection('technicians').doc(tech.id).set({
@@ -146,30 +147,30 @@ async function activate(base: string, chatId: string, token: string, from: any) 
   }, { merge: true });
   await setTechnicianMenu(base, { ...tech, telegramChatId: chatId }).catch(() => {});
   await sendMessage(chatId,
-    `✅ <b>Activation réussie !</b>\n\nBonjour ${tech.fullName}, votre compte est lié au dispatch 3GCOM.\n` +
-    `Vous recevrez ici vos ordres d'intervention. Le bouton <b>Mon espace</b> (en bas à gauche) ouvre vos interventions et vos prestations à déclarer.`);
+    `✅ <b>تم التفعيل !</b>\n\nمرحبا ${tech.fullName}، حسابك مرتبط الآن بـ 3GCOM Dispatch.\n` +
+    `ستصلك هنا التدخلات. زر <b>Mon espace</b> (أسفل اليسار) يفتح تدخلاتك والأشغال التي يجب تسجيلها.`);
   return listTickets(chatId, tech);
 }
 
 async function listTickets(chatId: string, tech: Technician) {
   const tickets = await openTicketsOf(tech.id);
-  if (tickets.length === 0) return sendMessage(chatId, '📭 Aucune intervention en cours pour le moment.');
+  if (tickets.length === 0) return sendMessage(chatId, '📭 لا توجد تدخلات حاليا.');
   // Oldest claims first, so the late ones come first, with a short summary
   tickets.sort((a, b) => (a.registeredAt || '').localeCompare(b.registeredAt || ''));
   const late = tickets.filter(t => t.registeredAt && computeTicketSLA(t.registeredAt).slaStatus === 'EXPIRED').length;
-  await sendMessage(chatId, `📋 <b>${tickets.length} intervention(s) en cours</b>` + (late ? `\n🔴 <b>${late} hors délai</b> : à traiter en priorité` : ''));
+  await sendMessage(chatId, `📋 <b>${tickets.length} تدخلات جارية</b>` + (late ? `\n🔴 <b>${late} hors délai</b> : الأولوية لها` : ''));
   await sendWorkOrdersTo(tech, tickets);
 }
 
 async function listToDeclare(base: string, chatId: string, tech: Technician) {
   const { toDeclare } = await technicianPrestations(tech.id);
-  if (toDeclare.length === 0) return sendMessage(chatId, '✅ Aucune prestation à déclarer. Merci !');
+  if (toDeclare.length === 0) return sendMessage(chatId, '✅ لا توجد أشغال للتسجيل. شكرا !');
   const shown = toDeclare.slice(0, 10);
   await sendMessage(
     chatId,
-    `📝 <b>${toDeclare.length} prestation(s) à déclarer</b>\n` +
+    `📝 <b>${toDeclare.length} أشغال للتسجيل</b>\n` +
       shown.map(t => `• ${t.ticketNumber} — ${t.clientName}${t.splitterRef ? ` (splitter ${t.splitterRef})` : ''}`).join('\n') +
-      (toDeclare.length > shown.length ? `\n… et ${toDeclare.length - shown.length} autre(s) dans « Mon espace ».` : ''),
+      (toDeclare.length > shown.length ? `\n… و ${toDeclare.length - shown.length} أخرى في « Mon espace ».` : ''),
     [
       ...shown.map(t => [declareButton(base, tech, t.id)].map(b => ({ ...b, text: `📝 ${t.ticketNumber}` }))),
       [webAppButton('📂 Ouvrir Mon espace', technicianAppUrl(base, tech, { tab: 'declare' }))],
@@ -188,16 +189,16 @@ async function onCallback(base: string, query: any) {
 
   const tech = await findTechnicianByChat(chatId);
   if (!tech || technicianIsBlocked(tech)) {
-    return answerCallback(query.id, 'Compte non lié ou suspendu.');
+    return answerCallback(query.id, 'الحساب غير مرتبط أو موقوف.');
   }
 
   switch (action) {
     case 'nf': // choose NF type
       await answerCallback(query.id);
       if (messageId) await editButtons(chatId, messageId, [
-        [{ text: group ? '✅ NF standard (tout le splitter)' : '✅ NF standard', callback_data: `${p}nfs:${a}` }],
+        [{ text: group ? '✅ NF (كل الـ Splitter)' : '✅ NF', callback_data: `${p}nfs:${a}` }],
         [configNfButton(base, tech, a, group)],
-        [{ text: '↩️ Retour', callback_data: `${p}back:${a}` }],
+        [{ text: '↩️ رجوع', callback_data: `${p}back:${a}` }],
       ]);
       return;
 
@@ -208,30 +209,27 @@ async function onCallback(base: string, query: any) {
 
     case 'nfc': // older messages: config centrale now needs the form (serial + photo)
       await answerCallback(query.id);
-      return sendMessage(chatId, '⚙️ La NF config centrale demande le numéro de série et sa photo :', [[configNfButton(base, tech, a, group)]]);
+      return sendMessage(chatId, '⚙️ NF Config : أدخل N° série ONT وصورته :', [[configNfButton(base, tech, a, group)]]);
 
     case 'lit': // choose litige reason
       await answerCallback(query.id);
       if (messageId) await editButtons(chatId, messageId, [
-        ...LITIGE_REASONS.map((r, i) => [{ text: r.label, callback_data: `${p}lr:${i}:${a}` }]),
-        [{ text: '↩️ Retour', callback_data: `${p}back:${a}` }],
+        // Index = position in LITIGE_REASONS (kept stable for the messages already sent)
+        ...LITIGE_REASONS.map((r, i) => [{ text: r.techLabel, callback_data: `${p}lr:${i}:${a}` }]),
+        [{ text: '↩️ رجوع', callback_data: `${p}back:${a}` }],
       ]);
       return;
 
     case 'lr': { // litige reason chosen
       const reason = LITIGE_REASONS[Number(a)];
       const ticketId = b;
-      if (!reason) return answerCallback(query.id, 'Motif inconnu.');
+      if (!reason) return answerCallback(query.id, 'سبب غير معروف.');
       await answerCallback(query.id);
+      // RDV: tomorrow (one tap) or another date typed freely
       if (reason.code === 'RDV') {
-        if (messageId) await editButtons(chatId, messageId, rdvDayButtons(p, ticketId));
-        return;
-      }
-      if (reason.code === 'CLIENT_UNREACHABLE') {
         if (messageId) await editButtons(chatId, messageId, [
-          [{ text: '📞 Demander un autre numéro', callback_data: `${p}ln:1:${ticketId}` }],
-          [{ text: '✔️ Enregistrer sans demande', callback_data: `${p}ln:0:${ticketId}` }],
-          [{ text: '↩️ Retour', callback_data: `${p}lit:${ticketId}` }],
+          [{ text: '📅 غدا', callback_data: `${p}rdt:${ticketId}` }, { text: '🗓 تاريخ آخر', callback_data: `${p}rdx:${ticketId}` }],
+          [{ text: '↩️ رجوع', callback_data: `${p}lit:${ticketId}` }],
         ]);
         return;
       }
@@ -258,10 +256,17 @@ async function onCallback(base: string, query: any) {
       return report(base, chatId, tech, c, group, { kind: 'LITIGE', reasonCode: 'RDV', rdvDateTime: rdv });
     }
 
-    case 'rdx': // RDV on another date → typed
+    case 'rdt': { // RDV tomorrow, without time
       await answerCallback(query.id);
       if (messageId) await editButtons(chatId, messageId, []);
-      return ask(chatId, { ticketId: a, reasonCode: 'RDV', group, step: 'RDV_DATE' });
+      const tomorrow = rdvToIso(dayCode(new Date(Date.now() + 86400_000)), '00:00') || undefined;
+      return report(base, chatId, tech, a, group, { kind: 'LITIGE', reasonCode: 'RDV', rdvDateTime: tomorrow, notes: 'غدا' });
+    }
+
+    case 'rdx': // RDV on another date → typed freely
+      await answerCallback(query.id);
+      if (messageId) await editButtons(chatId, messageId, []);
+      return ask(chatId, { ticketId: a, reasonCode: 'RDV', group, step: 'RDV_FREE' });
 
     case 'rh': // chosen day, another time → typed
       await answerCallback(query.id);
@@ -274,7 +279,7 @@ async function onCallback(base: string, query: any) {
       return;
 
     case 'done': // status label of a ticket already handled
-      return answerCallback(query.id, 'Déjà traité ✅');
+      return answerCallback(query.id, 'تمت المعالجة ✅');
 
     default:
       return answerCallback(query.id);
@@ -288,16 +293,17 @@ async function report(base: string, chatId: string, tech: Technician, ticketId: 
       : [await recordTechnicianReport(tech, ticketId, payload)];
     const first = tickets[0];
     const what = tickets.length > 1
-      ? `les <b>${tickets.length} tickets</b> du splitter ${first.splitterRef}`
-      : `le ticket ${first.ticketNumber}`;
-    // Buttons of the ticket's messages become a status; after an NF, offer the declaration
+      ? `${tickets.length} tickets (Splitter ${first.splitterRef})`
+      : `Ticket ${first.ticketNumber}`;
+    // The buttons of the ticket's messages are removed
     await afterTechnicianReport(base, tech, tickets, payload.kind);
     if (payload.kind === 'LITIGE') {
+      const label = LITIGE_REASONS.find(r => r.code === first.lastLitigeReasonCode)?.techLabel || first.lastLitigeReasonLabel;
       const details = [
-        first.lastLitigeRdvDate ? `📅 RDV le <b>${formatCasablancaDateTime(first.lastLitigeRdvDate)}</b>` : '',
-        first.lastLitigeNeedsContact ? '📞 Demande de nouveau numéro transmise à l\'orienteur.' : '',
+        first.lastLitigeRdvDate ? `📅 RDV : <b>${formatRdvDate(first.lastLitigeRdvDate)}</b>` : '',
+        payload.reasonCode === 'RDV' && payload.notes && payload.notes !== 'غدا' ? `📝 ${payload.notes}` : '',
       ].filter(Boolean).join('\n');
-      return sendMessage(chatId, `🔴 <b>Litige enregistré</b> pour ${what} (${first.lastLitigeReasonLabel}). L'orienteur est prévenu.${details ? `\n${details}` : ''}`);
+      return sendMessage(chatId, `🔴 <b>تم تسجيل Litige</b> : ${what} (${label}). تم إخبار المنسق.${details ? `\n${details}` : ''}`);
     }
   } catch (err) {
     if (err instanceof AccessError) return sendMessage(chatId, `⚠️ ${err.message}`);

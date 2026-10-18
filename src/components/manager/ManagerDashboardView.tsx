@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { store } from '../../services/storage';
-import { formatCasablancaDateTime } from '../../domain/format';
+import { formatCasablancaDateTime, formatRdvDate } from '../../domain/format';
 import { exportTicketsToExcel, exportTechnicianMatrixToExcel } from '../../services/excelExporter';
 import { Ticket, MANUAL_TICKET_NATURES } from '../../types';
 import { SplitterIncidentsPanel } from '../tickets/SplitterIncidentsPanel';
@@ -232,7 +232,7 @@ export const ManagerDashboardView: React.FC<ManagerDashboardViewProps> = ({ onOp
                   </div>
                   <div className="text-slate-500 truncate">
                     {techName(ticket.currentAssignedTechId) ? <>👤 {techName(ticket.currentAssignedTechId)}</> : <span className="text-amber-700">Non affecté</span>}
-                    {kind === 'LITIGE' && <> · {ticket.lastLitigeReasonLabel}{ticket.lastLitigeRdvDate && ` · RDV ${formatCasablancaDateTime(ticket.lastLitigeRdvDate)}`}</>}
+                    {kind === 'LITIGE' && <> · {ticket.lastLitigeReasonLabel}{ticket.lastLitigeRdvDate && ` · RDV ${formatRdvDate(ticket.lastLitigeRdvDate)}`}</>}
                   </div>
                 </div>
                 {kind !== 'LITIGE' && (

@@ -197,22 +197,24 @@ describe('formatTicketMessage', () => {
       reopenedWithNewPhone: '0661223344',
       previousClientPhone: '0522000000',
       lastDispatcherUpdateNotes: 'Client joignable après 17h',
+      lastLitigeReasonCode: 'CLIENT_UNREACHABLE',
       lastLitigeReasonLabel: 'Client injoignable',
     }));
-    expect(text.startsWith('↩️ <b>RETOUR DE L\'ORIENTEUR</b>')).toBe(true);
-    expect(text).toContain('Ticket REC-1</b> : à reprendre');
-    expect(text).toContain('NOUVEAU NUMÉRO À APPELER</b>\n👉 <b>+212 661 22 33 44</b>');
-    expect(text).toContain('<s>Ancien : +212 522 00 00 00</s>');
-    expect(text.indexOf('NOUVEAU NUMÉRO')).toBeLessThan(text.indexOf('Client joignable après 17h'));
+    expect(text.startsWith('↩️ <b>رجوع من المنسق (orienteur)</b>')).toBe(true);
+    expect(text).toContain('Ticket REC-1</b> : أعد التدخل');
+    expect(text).toContain('رقم جديد للاتصال</b>\n👉 <b>+212 661 22 33 44</b>');
+    expect(text).toContain('<s>الرقم القديم : +212 522 00 00 00</s>');
+    expect(text.indexOf('رقم جديد')).toBeLessThan(text.indexOf('Client joignable après 17h'));
     expect(text.indexOf('Client joignable après 17h')).toBeLessThan(text.indexOf('Karim'));
-    expect(text).toContain('Votre litige : Client injoignable');
+    // litige of the technician with his own (Arabic) button label
+    expect(text).toContain('النزاع السابق : لا يجيب');
     // the number is not repeated in the reminder
     expect(text.split('+212 661 22 33 44')).toHaveLength(2);
   });
 
   it('retour sans nouveau numéro : numéro habituel dans le rappel', () => {
     const text = formatRelanceMessage(ticket({ currentStatus: 'REOPENED', clientPhone: '0661223344', lastDispatcherUpdateNotes: 'RDV confirmé à 10h' }));
-    expect(text).not.toContain('NOUVEAU NUMÉRO');
+    expect(text).not.toContain('رقم جديد');
     expect(text).toContain('📞 +212 661 22 33 44');
     expect(text).toContain('« RDV confirmé à 10h »');
   });
@@ -246,7 +248,8 @@ describe('formatTicketMessage', () => {
 
   it('signale une deuxième visite et la mise à jour de l\'orienteur', () => {
     const text = formatTicketMessage(ticket({ visitCount: 2, lastLitigeReasonLabel: 'Client injoignable', lastDispatcherUpdateNotes: 'Appeler avant' }));
-    expect(text).toContain('NOUVELLE RÉCLAMATION');
+    expect(text).toContain('شكاية جديدة</b> (الزيارة رقم 2)');
+    expect(text).toContain('ملاحظة المنسق');
     expect(text).toContain('Appeler avant');
   });
 
@@ -254,12 +257,21 @@ describe('formatTicketMessage', () => {
     const text = formatTicketMessage(ticket({ visitCount: 2, importOutcome: 'REPRISE', completedAt: '2026-10-14T09:00:00Z' }));
     expect(text).toContain('REPRISE');
     expect(text).toContain('14/10/2026 09:00');
-    expect(text).toContain('non facturable');
+    expect(text).toContain('بدون مقابل');
   });
 
   it('retour client : rappelle le litige précédent', () => {
-    const text = formatTicketMessage(ticket({ visitCount: 2, importOutcome: 'RETOUR_CLIENT', lastLitigeReasonLabel: 'Rendez-vous convenu (RDV)' }));
+    const text = formatTicketMessage(ticket({ visitCount: 2, importOutcome: 'RETOUR_CLIENT', lastLitigeReasonCode: 'RDV', lastLitigeReasonLabel: 'Rendez-vous convenu (RDV)' }));
     expect(text).toContain('RETOUR CLIENT');
-    expect(text).toContain('Rendez-vous convenu (RDV)');
+    expect(text).toContain('النزاع السابق : RDV');
+  });
+
+  it('message en arabe, données du ticket en français', () => {
+    const text = formatTicketMessage(ticket({ clientName: 'Karim', clientAddress: 'Bd Anfa', rawZoneText: 'CALIFORNIE' }));
+    expect(text).toContain('تدخل جديد');
+    expect(text).toContain('اختر أحد الأزرار أسفله');
+    for (const french of ['Ticket :', 'Abonné :</b> Karim', 'Téléphone :', 'Adresse :</b> Bd Anfa', 'Zone MSAN :</b> CALIFORNIE']) {
+      expect(text).toContain(french);
+    }
   });
 });

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Ticket } from '../../types';
 import { store } from '../../services/storage';
-import { formatCasablancaDateTime } from '../../domain/format';
+import { formatCasablancaDateTime, formatRdvDate } from '../../domain/format';
 import { 
   AlertTriangle, 
   RotateCcw, 
@@ -159,7 +159,7 @@ export const LitigeResolutionModal: React.FC<LitigeResolutionModalProps> = ({
             <div className="flex items-center gap-2 text-amber-800 bg-amber-50 p-2 rounded border border-amber-200 text-xs">
               <Calendar className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
-                RDV convenu par le technicien : <b>{formatCasablancaDateTime(ticket.lastLitigeRdvDate)}</b>
+                RDV convenu par le technicien : <b>{formatRdvDate(ticket.lastLitigeRdvDate)}</b>
               </span>
             </div>
           )}

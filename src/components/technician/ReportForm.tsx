@@ -52,7 +52,6 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   const [nfType, setNfType] = useState<'STANDARD' | 'CENTRAL_CONFIG'>(initialNfType);
   const [serial, setSerial] = useState('');
   const [serialPhotos, setSerialPhotos] = useState<string[]>([]);
-  const [declareNow, setDeclareNow] = useState(true);
   const [code, setCode] = useState<PrestationCode | ''>('');
   const [raccordements, setRaccordements] = useState(1);
   const [withMaterials, setWithMaterials] = useState(false);
@@ -69,7 +68,8 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
   const isGroup = mode === 'nf' && splitterGroupSize > 1;
   const isConfig = mode === 'nf' && nfType === 'CENTRAL_CONFIG';
-  const declaring = mode === 'declare' || (declareNow && !ticket.nonBillable);
+  // The work done is declared only from "À déclarer" (mode "declare"), never in the NF form
+  const declaring = mode === 'declare';
   const noWork = isNoWork(code || undefined);
   const effectiveMaterials = withMaterials && !noWork ? materials : NO_MATERIALS;
   const setMaterial = (key: keyof MaterialsInstalled) => (value: number) => setMaterials(m => ({ ...m, [key]: value }));
@@ -120,8 +120,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       onDone(
         mode === 'declare'
           ? `Prestation déclarée pour le ticket ${ticket.ticketNumber}. Merci !`
-          : `NF enregistré${count > 1 ? ` pour les ${count} tickets du splitter` : ''}` +
-            (declaring ? ' et prestation déclarée. Merci !' : '. Pensez à déclarer la prestation (onglet « À déclarer »).')
+          : `تم تسجيل NF${count > 1 ? ` (${count} tickets du splitter)` : ''}. سجّل الأشغال لاحقا في « À déclarer ».`
       );
     } catch {
       setErrors(['Pas de connexion Internet. Réessayez dans un instant.']);
@@ -136,69 +135,51 @@ export const ReportForm: React.FC<ReportFormProps> = ({
   return (
     <form onSubmit={submit} className="space-y-3 pb-28">
       <button type="button" onClick={onCancel} className="flex items-center gap-1.5 text-sm font-semibold text-slate-600">
-        <ArrowLeft className="w-4 h-4" /> Retour
+        <ArrowLeft className="w-4 h-4" /> {mode === 'nf' ? 'رجوع' : 'Retour'}
       </button>
 
       <div className="bg-brand-navy-900 text-white rounded-2xl p-4">
         <div className="text-[11px] uppercase tracking-wider text-white/60 font-bold">
-          {mode === 'nf' ? 'Clôture NF' : 'Déclaration de prestation'}
+          {mode === 'nf' ? 'NF' : 'Déclaration de prestation'}
         </div>
         <div className="font-mono font-bold text-lg">{ticket.ticketNumber}</div>
         <div className="text-sm text-white/80">{ticket.clientName}</div>
         {isGroup && (
           <div className="mt-2 inline-flex items-center gap-1.5 bg-brand-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
-            <Cable className="w-3.5 h-3.5" /> Splitter {ticket.splitterRef} · {splitterGroupSize} tickets clôturés ensemble
+            <Cable className="w-3.5 h-3.5" /> Splitter {ticket.splitterRef} · {splitterGroupSize} tickets {mode === 'nf' ? 'معا' : 'clôturés ensemble'}
           </div>
         )}
       </div>
 
       {mode === 'nf' && (
         <div className={section}>
-          <div className={title}>1. Type de NF</div>
+          <div className={title}>نوع NF</div>
           <div className="grid grid-cols-2 gap-2">
-            <Choice selected={nfType === 'STANDARD'} onClick={() => setNfType('STANDARD')}>✅ NF standard</Choice>
-            <Choice selected={nfType === 'CENTRAL_CONFIG'} onClick={() => setNfType('CENTRAL_CONFIG')}>⚙️ NF config centrale</Choice>
+            <Choice selected={nfType === 'STANDARD'} onClick={() => setNfType('STANDARD')}>✅ NF</Choice>
+            <Choice selected={nfType === 'CENTRAL_CONFIG'} onClick={() => setNfType('CENTRAL_CONFIG')}>⚙️ NF Config</Choice>
           </div>
         </div>
       )}
 
       {isConfig && (
         <div className={section}>
-          <div className={title}>Numéro de série ONT (obligatoire)</div>
+          <div className={title}>N° série ONT (إجباري)</div>
           <input
             value={serial}
             onChange={e => setSerial(e.target.value.toUpperCase())}
-            placeholder="ex : ALCLB1234567"
+            placeholder="مثال : ALCLB1234567"
             autoCapitalize="characters"
             className="w-full h-12 px-3 text-lg font-mono font-bold border border-slate-300 rounded-xl"
           />
-          <PhotoPicker photos={serialPhotos} onChange={setSerialPhotos} max={LIMITS.photosPerKind} label="Étiquette" />
-        </div>
-      )}
-
-      {mode === 'nf' && ticket.nonBillable && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-900 rounded-2xl p-4 text-sm">
-          🔁 <b>Reprise de votre intervention</b> : pas de prestation à déclarer pour ce ticket.
-        </div>
-      )}
-
-      {mode === 'nf' && !ticket.nonBillable && (
-        <div className={section}>
-          <div className={title}>2. Prestation</div>
-          <div className="grid grid-cols-2 gap-2">
-            <Choice selected={declareNow} onClick={() => setDeclareNow(true)}>Déclarer maintenant</Choice>
-            <Choice selected={!declareNow} onClick={() => setDeclareNow(false)}>Plus tard</Choice>
-          </div>
-          {!declareNow && (
-            <p className="text-xs text-slate-500">Le ticket sera clôturé ; vous retrouverez la prestation dans l'onglet « À déclarer ».</p>
-          )}
+          <div dir="auto" className="text-sm font-semibold text-slate-700">صورة ملصق N° série (إجبارية)</div>
+          <PhotoPicker photos={serialPhotos} onChange={setSerialPhotos} max={LIMITS.photosPerKind} label="صورة" />
         </div>
       )}
 
       {declaring && (
         <>
           <div className={section}>
-            <div className={title}>{mode === 'nf' ? 'Prestation réalisée' : '1. Prestation réalisée'}</div>
+            <div className={title}>1. Prestation réalisée</div>
             <div className="grid grid-cols-2 gap-2">
               {PRESTATIONS.map(p => (
                 <Choice key={p.code} selected={code === p.code} onClick={() => setCode(p.code)}>{p.noWork ? '🚫 ' : ''}{p.label}</Choice>
@@ -247,21 +228,20 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
       {/* Summary */}
       <div className="bg-slate-100 rounded-2xl p-4 text-sm text-slate-700 space-y-1">
-        <div className="font-bold text-slate-900">Récapitulatif</div>
-        {mode === 'nf' && <div>NF : <b>{nfType === 'CENTRAL_CONFIG' ? `config centrale${serial ? ` (${serial})` : ''}` : 'standard'}</b>{isGroup ? ` · ${splitterGroupSize} tickets` : ''}</div>}
-        {declaring ? (
+        <div className="font-bold text-slate-900">{mode === 'nf' ? 'ملخص' : 'Récapitulatif'}</div>
+        {mode === 'nf' && <div><b>{nfType === 'CENTRAL_CONFIG' ? `NF Config${serial ? ` (${serial})` : ''}` : 'NF'}</b>{isGroup ? ` · ${splitterGroupSize} tickets` : ''}</div>}
+        {mode === 'nf' && <div dir="auto" className="text-xs text-slate-500">الأشغال تُسجَّل بعد ذلك في « À déclarer ».</div>}
+        {declaring && (
           <>
             <div>Prestation : <b>{code ? `${prestationLabel(code)}${code === 'FO_01_02' ? ` × ${raccordements}` : ''}` : '—'}</b></div>
             <div>Matériel : <b>{describeMaterials(effectiveMaterials)}</b></div>
           </>
-        ) : (
-          <div>Prestation : <b>à déclarer plus tard</b></div>
         )}
       </div>
 
       {errors.length > 0 && (
         <div ref={errorsRef} className="bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl p-3 text-sm font-semibold space-y-1">
-          {errors.map((e, i) => <div key={i}>• {e}</div>)}
+          {errors.map((e, i) => <div key={i} dir="auto">• {e}</div>)}
         </div>
       )}
 
@@ -272,7 +252,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
           className="w-full max-w-lg mx-auto h-14 rounded-2xl bg-brand-orange-500 active:bg-brand-orange-600 text-white text-base font-bold flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {mode === 'nf' ? <CheckCircle2 className="w-5 h-5" /> : <Send className="w-5 h-5" />}
-          {isSubmitting ? 'Envoi…' : mode === 'nf' ? 'Valider la NF' : 'Envoyer la déclaration'}
+          {isSubmitting ? (mode === 'nf' ? 'جاري الإرسال…' : 'Envoi…') : mode === 'nf' ? 'تأكيد NF' : 'Envoyer la déclaration'}
         </button>
       </div>
     </form>

@@ -51,7 +51,7 @@ describe('NF config centrale', () => {
   it('exige le numéro de série et sa photo', () => {
     expect(validateConfigNf('ALCLB1234567', 1)).toEqual([]);
     expect(validateConfigNf(undefined, 1)).toHaveLength(1);
-    expect(validateConfigNf('ALCLB1234567', 0)).toEqual(['Prenez la photo de l\'étiquette du numéro de série.']);
+    expect(validateConfigNf('ALCLB1234567', 0)).toEqual(['التقط صورة ملصق N° série.']);
   });
 
   it('numéro de série : lettres et chiffres, 8 à 24, espaces et tirets ignorés', () => {

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { formatSLADisplay, formatCasablancaDateTime, formatCasablancaTimeOnly } from './format';
+import { formatSLADisplay, formatCasablancaDateTime, formatCasablancaTimeOnly, formatRdvDate } from './format';
+
+describe('formatRdvDate', () => {
+  it('RDV « غدا » sans heure : date seule ; RDV avec heure : date et heure', () => {
+    expect(formatRdvDate('2026-10-19T00:00:00Z')).toBe('19/10/2026');
+    expect(formatRdvDate('2026-10-19T14:30:00Z')).toBe('19/10/2026 14:30');
+  });
+});
 
 describe('formatSLADisplay', () => {
   it('temps restant', () => {

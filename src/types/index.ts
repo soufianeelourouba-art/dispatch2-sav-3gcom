@@ -98,7 +98,8 @@ export type LitigeReasonCode =
 
 export interface LitigeDef {
   code: LitigeReasonCode;
-  label: string;
+  label: string;      // orienteur / manager screens (French)
+  techLabel: string;  // technician buttons (Telegram, app): short, Arabic where useful
   description: string;
   category: 'EXTERNAL' | 'TECHNICAL';
 }
@@ -107,30 +108,35 @@ export const LITIGE_REASONS: LitigeDef[] = [
   {
     code: 'CLIENT_UNREACHABLE',
     label: 'Client injoignable',
+    techLabel: 'لا يجيب',
     description: 'Plusieurs appels sans réponse lors de la prise de contact ou devant le domicile.',
     category: 'EXTERNAL',
   },
   {
     code: 'RDV',
-    label: 'Rendez-vous convenu (RDV)',
+    label: 'RDV',
+    techLabel: 'RDV',
     description: 'Le client demande un passage différé à une date/heure précise.',
     category: 'EXTERNAL',
   },
   {
     code: 'GC',
-    label: 'Génie Civil (GC)',
+    label: 'GC',
+    techLabel: 'GC',
     description: 'Fourreau bouché, chambre telecom inaccessible, problème d\'infrastructure extérieure.',
     category: 'TECHNICAL',
   },
   {
     code: 'AUTRE',
     label: 'Autre motif',
+    techLabel: 'مشكل آخر',
     description: 'Refus client, problème syndic, incident imprévu sur site.',
     category: 'EXTERNAL',
   },
   {
     code: 'HORS_ZONE',
-    label: '📍 Hors de ma zone',
+    label: 'Hors zone',
+    techLabel: 'Hors Zone',
     description: 'Le ticket n\'est pas dans la zone du technicien : l\'orienteur doit le réaffecter.',
     category: 'EXTERNAL',
   },

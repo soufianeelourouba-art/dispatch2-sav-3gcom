@@ -21,7 +21,7 @@ export const declareButton = (base: string, tech: Technician, ticketId: string) 
 
 export const configNfButton = (base: string, tech: Technician, ticketId: string, group: boolean) =>
   webAppButton(
-    group ? '⚙️ NF config centrale (tout le splitter)' : '⚙️ NF config centrale',
+    group ? '⚙️ NF Config (كل الـ Splitter)' : '⚙️ NF Config',
     technicianAppUrl(base, tech, { mode: 'nf', nfType: 'CENTRAL_CONFIG', ticket: ticketId, ...(group ? { scope: 'SPLITTER' } : {}) })
   );
 
@@ -35,6 +35,6 @@ export async function setTechnicianMenu(base: string, tech: Technician) {
 }
 
 export const BOT_COMMANDS = [
-  { command: 'tickets', description: 'Mes interventions en cours' },
-  { command: 'a_declarer', description: 'Mes prestations à déclarer' },
+  { command: 'tickets', description: 'تدخلاتي الجارية' },
+  { command: 'a_declarer', description: 'الأشغال التي يجب تسجيلها' },
 ];
