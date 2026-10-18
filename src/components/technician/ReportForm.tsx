@@ -4,16 +4,16 @@ import {
   MAX_RACCORDEMENTS,
   PRESTATIONS,
   isNoWork,
-  describeMaterials,
+  describeMaterialsAr,
   hasMaterials,
-  prestationLabel,
+  prestationTechLabel,
   validateConfigNf,
   validateDeclaration,
   type MaterialsInstalled,
   type PrestationCode,
 } from '../../domain/prestations';
 import { Choice, PhotoPicker, Stepper } from './FieldControls';
-import { ArrowLeft, CheckCircle2, Cable, Send } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Cable, Send } from 'lucide-react';
 
 export interface FormTicket {
   id: string;
@@ -113,40 +113,39 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErrors([data.error || 'Envoi impossible, réessayez.']);
+        setErrors([data.error || 'تعذر الإرسال، أعد المحاولة.']);
         return;
       }
       const count = data.ticketNumbers?.length || 1;
       onDone(
         mode === 'declare'
-          ? `Prestation déclarée pour le ticket ${ticket.ticketNumber}. Merci !`
-          : `تم تسجيل NF${count > 1 ? ` (${count} tickets du splitter)` : ''}. سجّل الأشغال لاحقا في « À déclarer ».`
+          ? `تم تسجيل الأشغال : Ticket ${ticket.ticketNumber}. شكرا !`
+          : `تم تسجيل NF${count > 1 ? ` (${count} tickets Splitter)` : ''}. سجّل الأشغال لاحقا في « للتسجيل ».`
       );
     } catch {
-      setErrors(['Pas de connexion Internet. Réessayez dans un instant.']);
+      setErrors(['لا يوجد اتصال بالإنترنت. أعد المحاولة بعد قليل.']);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const section = 'bg-white rounded-2xl border border-slate-200 p-4 space-y-3';
-  const title = 'text-xs font-bold uppercase tracking-wider text-slate-500';
+  const title = 'text-sm font-bold text-slate-500';
+  const label = 'text-sm font-semibold text-slate-700';
 
   return (
     <form onSubmit={submit} className="space-y-3 pb-28">
       <button type="button" onClick={onCancel} className="flex items-center gap-1.5 text-sm font-semibold text-slate-600">
-        <ArrowLeft className="w-4 h-4" /> {mode === 'nf' ? 'رجوع' : 'Retour'}
+        <ArrowRight className="w-4 h-4" /> رجوع
       </button>
 
       <div className="bg-brand-navy-900 text-white rounded-2xl p-4">
-        <div className="text-[11px] uppercase tracking-wider text-white/60 font-bold">
-          {mode === 'nf' ? 'NF' : 'Déclaration de prestation'}
-        </div>
-        <div className="font-mono font-bold text-lg">{ticket.ticketNumber}</div>
-        <div className="text-sm text-white/80">{ticket.clientName}</div>
+        <div className="text-xs text-white/60 font-bold">{mode === 'nf' ? 'NF' : 'تسجيل الأشغال'}</div>
+        <div dir="ltr" className="font-mono font-bold text-lg text-right">{ticket.ticketNumber}</div>
+        <div dir="auto" className="text-sm text-white/80">{ticket.clientName}</div>
         {isGroup && (
           <div className="mt-2 inline-flex items-center gap-1.5 bg-brand-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
-            <Cable className="w-3.5 h-3.5" /> Splitter {ticket.splitterRef} · {splitterGroupSize} tickets {mode === 'nf' ? 'معا' : 'clôturés ensemble'}
+            <Cable className="w-3.5 h-3.5" /> <span dir="ltr">Splitter {ticket.splitterRef} · {splitterGroupSize} tickets</span> معا
           </div>
         )}
       </div>
@@ -167,11 +166,12 @@ export const ReportForm: React.FC<ReportFormProps> = ({
           <input
             value={serial}
             onChange={e => setSerial(e.target.value.toUpperCase())}
-            placeholder="مثال : ALCLB1234567"
+            placeholder="ALCLB1234567"
             autoCapitalize="characters"
+            dir="ltr"
             className="w-full h-12 px-3 text-lg font-mono font-bold border border-slate-300 rounded-xl"
           />
-          <div dir="auto" className="text-sm font-semibold text-slate-700">صورة ملصق N° série (إجبارية)</div>
+          <div className={label}>صورة ملصق N° série (إجبارية)</div>
           <PhotoPicker photos={serialPhotos} onChange={setSerialPhotos} max={LIMITS.photosPerKind} label="صورة" />
         </div>
       )}
@@ -179,46 +179,46 @@ export const ReportForm: React.FC<ReportFormProps> = ({
       {declaring && (
         <>
           <div className={section}>
-            <div className={title}>1. Prestation réalisée</div>
+            <div className={title}>1. الأشغال المنجزة</div>
             <div className="grid grid-cols-2 gap-2">
               {PRESTATIONS.map(p => (
-                <Choice key={p.code} selected={code === p.code} onClick={() => setCode(p.code)}>{p.noWork ? '🚫 ' : ''}{p.label}</Choice>
+                <Choice key={p.code} selected={code === p.code} onClick={() => setCode(p.code)}>{p.noWork ? `🚫 ${p.techLabel}` : <span dir="ltr">{p.techLabel}</span>}</Choice>
               ))}
             </div>
             {noWork && (
-              <p className="text-xs text-slate-500">Aucun raccordement ni matériel : rien à payer pour ce ticket.</p>
+              <p className="text-xs text-slate-500">لا raccordement ولا معدات : لا شيء للأداء في هذا Ticket.</p>
             )}
             {code === 'FO_01_02' && (
               <div className="flex items-center justify-between gap-3 pt-1">
-                <span className="text-sm font-semibold text-slate-700">Nombre de raccordements</span>
+                <span className={label}>عدد raccordements</span>
                 <Stepper value={raccordements} onChange={setRaccordements} min={1} max={MAX_RACCORDEMENTS} />
               </div>
             )}
           </div>
 
           {!noWork && <div className={section}>
-            <div className={title}>Matériel installé</div>
+            <div className={title}>2. المعدات المركبة</div>
             <div className="grid grid-cols-2 gap-2">
-              <Choice selected={!withMaterials} onClick={() => setWithMaterials(false)}>Aucun</Choice>
-              <Choice selected={withMaterials} onClick={() => setWithMaterials(true)}>Oui, j'ai posé du matériel</Choice>
+              <Choice selected={!withMaterials} onClick={() => setWithMaterials(false)}>بدون معدات</Choice>
+              <Choice selected={withMaterials} onClick={() => setWithMaterials(true)}>نعم، ركبت معدات</Choice>
             </div>
             {withMaterials && (
               <div className="space-y-3 pt-1">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-slate-700">Joints</span>
+                  <span className={label}>Joints</span>
                   <Stepper value={materials.joints} onChange={setMaterial('joints')} max={LIMITS.joints} />
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-slate-700">Splitters</span>
+                  <span className={label}>Splitters</span>
                   <Stepper value={materials.splitters} onChange={setMaterial('splitters')} max={LIMITS.splitters} />
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-slate-700">Câble</span>
+                  <span className={label}>Câble</span>
                   <Stepper value={materials.cableMeters} onChange={setMaterial('cableMeters')} max={LIMITS.cableMeters} step={10} unit="m" editable />
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-slate-700 mb-1.5">Photo du matériel (obligatoire)</div>
-                  <PhotoPicker photos={materialPhotos} onChange={setMaterialPhotos} max={LIMITS.photosPerKind} label="Photo" />
+                  <div className={`${label} mb-1.5`}>صورة المعدات (إجبارية)</div>
+                  <PhotoPicker photos={materialPhotos} onChange={setMaterialPhotos} max={LIMITS.photosPerKind} label="صورة" />
                 </div>
               </div>
             )}
@@ -228,13 +228,13 @@ export const ReportForm: React.FC<ReportFormProps> = ({
 
       {/* Summary */}
       <div className="bg-slate-100 rounded-2xl p-4 text-sm text-slate-700 space-y-1">
-        <div className="font-bold text-slate-900">{mode === 'nf' ? 'ملخص' : 'Récapitulatif'}</div>
-        {mode === 'nf' && <div><b>{nfType === 'CENTRAL_CONFIG' ? `NF Config${serial ? ` (${serial})` : ''}` : 'NF'}</b>{isGroup ? ` · ${splitterGroupSize} tickets` : ''}</div>}
-        {mode === 'nf' && <div dir="auto" className="text-xs text-slate-500">الأشغال تُسجَّل بعد ذلك في « À déclarer ».</div>}
+        <div className="font-bold text-slate-900">ملخص</div>
+        {mode === 'nf' && <div><b>{nfType === 'CENTRAL_CONFIG' ? 'NF Config' : 'NF'}</b>{nfType === 'CENTRAL_CONFIG' && serial ? <> (<span dir="ltr">{serial}</span>)</> : ''}{isGroup ? ` · ${splitterGroupSize} tickets` : ''}</div>}
+        {mode === 'nf' && <div className="text-xs text-slate-500">الأشغال تُسجَّل بعد ذلك في « للتسجيل ».</div>}
         {declaring && (
           <>
-            <div>Prestation : <b>{code ? `${prestationLabel(code)}${code === 'FO_01_02' ? ` × ${raccordements}` : ''}` : '—'}</b></div>
-            <div>Matériel : <b>{describeMaterials(effectiveMaterials)}</b></div>
+            <div>الأشغال : <b dir="auto" className="inline-block">{code ? `${prestationTechLabel(code)}${code === 'FO_01_02' ? ` × ${raccordements}` : ''}` : '—'}</b></div>
+            <div>المعدات : <b dir="auto" className="inline-block">{describeMaterialsAr(effectiveMaterials)}</b></div>
           </>
         )}
       </div>
@@ -252,7 +252,7 @@ export const ReportForm: React.FC<ReportFormProps> = ({
           className="w-full max-w-lg mx-auto h-14 rounded-2xl bg-brand-orange-500 active:bg-brand-orange-600 text-white text-base font-bold flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {mode === 'nf' ? <CheckCircle2 className="w-5 h-5" /> : <Send className="w-5 h-5" />}
-          {isSubmitting ? (mode === 'nf' ? 'جاري الإرسال…' : 'Envoi…') : mode === 'nf' ? 'تأكيد NF' : 'Envoyer la déclaration'}
+          {isSubmitting ? 'جاري الإرسال…' : mode === 'nf' ? 'تأكيد NF' : 'إرسال الأشغال'}
         </button>
       </div>
     </form>

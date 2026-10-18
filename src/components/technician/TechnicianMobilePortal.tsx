@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { MANUAL_TICKET_NATURES } from '../../types';
-import { describeMaterials, prestationLabel, PRESTATIONS, type PrestationDeclaration } from '../../domain/prestations';
+import { LITIGE_REASONS, MANUAL_TICKET_NATURES } from '../../types';
+import { describeMaterialsAr, prestationTechLabel, PRESTATIONS, type PrestationDeclaration } from '../../domain/prestations';
 import { formatCasablancaDateTime, formatSLADisplay, formatRdvDate } from '../../domain/format';
 import { computeTicketSLA } from '../../domain/tickets';
 import { formatPhoneIntl, formatPhonesIntl } from '../../domain/litiges';
@@ -23,6 +23,7 @@ interface PortalTicket extends FormTicket {
   previousClientPhone?: string;
   registeredAt?: string;
   importOutcome?: string;
+  lastLitigeReasonCode?: string;
   lastLitigeReasonLabel?: string;
   lastLitigeRdvDate?: string;
   lastDispatcherUpdateNotes?: string;
@@ -78,6 +79,10 @@ interface TechnicianMobilePortalProps {
 }
 
 const REFRESH_MS = 30000;
+// Litige reason in the technician's words (same labels as the Telegram buttons)
+const litigeLabel = (t: { lastLitigeReasonCode?: string; lastLitigeReasonLabel?: string }) =>
+  LITIGE_REASONS.find(r => r.code === t.lastLitigeReasonCode)?.techLabel || t.lastLitigeReasonLabel || '';
+
 const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
 
 export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({ activationToken, onExitPortal }) => {
@@ -123,14 +128,14 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({ 
     if (mode === 'declare') {
       const ticket = data.toDeclare.find(t => t.id === id);
       if (ticket) setScreen({ kind: 'form', ticket, mode: 'declare', groupSize: 1 });
-      else setScreen({ kind: 'success', message: 'Cette prestation est déjà déclarée. Merci !' });
+      else setScreen({ kind: 'success', message: 'هذه الأشغال مسجلة من قبل. شكرا !' });
     } else if (mode === 'nf') {
       const ticket = data.tickets.find(t => t.id === id);
       if (ticket) {
         const nfType = params.get('nfType') === 'CENTRAL_CONFIG' ? 'CENTRAL_CONFIG' : 'STANDARD';
         setScreen({ kind: 'form', ticket, mode: 'nf', nfType, groupSize: params.get('scope') === 'SPLITTER' ? splitterCount(ticket) : 1 });
       } else {
-        setScreen({ kind: 'success', message: 'Ce ticket est déjà clôturé ou ne vous est plus affecté.' });
+        setScreen({ kind: 'success', message: 'هذا Ticket مغلق أو لم يعد مسندا إليك.' });
       }
     }
   }, [data, deepLinkHandled, splitterCount]);
@@ -145,28 +150,28 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({ 
   };
 
   if (loadState === 'LOADING') {
-    return <div className="min-h-screen bg-slate-50 text-slate-500 flex items-center justify-center text-sm">Chargement de vos interventions…</div>;
+    return <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-500 flex items-center justify-center text-sm">جاري تحميل تدخلاتك…</div>;
   }
 
   if (loadState === 'INVALID' || loadState === 'OFFLINE' || !data) {
     return (
       <FullMessage
         tone="error"
-        title={loadState === 'OFFLINE' ? 'Connexion impossible' : 'Lien technicien invalide ou expiré'}
+        title={loadState === 'OFFLINE' ? 'لا يوجد اتصال' : 'رابط غير صالح'}
         text={loadState === 'OFFLINE'
-          ? 'Vérifiez votre connexion Internet puis rechargez la page.'
-          : 'Ce lien n\'est plus actif. Contactez votre superviseur 3GCOM pour recevoir un nouveau lien.'}
+          ? 'تحقق من الاتصال بالإنترنت ثم أعد تحميل الصفحة.'
+          : 'هذا الرابط لم يعد صالحا. اطلب رابطا جديدا من المسؤول في 3GCOM.'}
         onBack={onExitPortal}
       />
     );
   }
 
   if (loadState === 'SUSPENDED') {
-    return <FullMessage tone="warning" title="Accès suspendu" text={`Bonjour ${data.technician.fullName}, votre accès a été suspendu par votre superviseur 3GCOM.`} onBack={onExitPortal} />;
+    return <FullMessage tone="warning" title="الحساب موقوف" text={`مرحبا ${data.technician.fullName}، تم إيقاف حسابك من طرف المسؤول في 3GCOM.`} onBack={onExitPortal} />;
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+    <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-900 font-sans">
       <header className="bg-brand-navy-900 text-white px-4 pt-3 sticky top-0 z-30">
         <div className="max-w-lg mx-auto">
           <div className="flex items-center justify-between pb-2">
@@ -174,19 +179,19 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({ 
               <img src="/brand/logo-3gcom-white.png" alt="3GCOM" className="h-8 w-auto" />
               <div>
                 <div className="text-sm font-bold leading-tight">{data.technician.fullName}</div>
-                <div className="text-[11px] text-white/60">Technicien · Fibre optique</div>
+                <div className="text-[11px] text-white/60">تقني · Fibre optique</div>
               </div>
             </div>
             {onExitPortal && !insideTelegram() && (
-              <button onClick={onExitPortal} className="text-[11px] text-white/70 px-2 py-1 rounded-lg hover:bg-white/10">Quitter</button>
+              <button onClick={onExitPortal} className="text-[11px] text-white/70 px-2 py-1 rounded-lg hover:bg-white/10">خروج</button>
             )}
           </div>
           {screen.kind === 'list' && (
             <nav className="flex">
               {([
-                ['todo', 'À faire', data.tickets.length, ClipboardList],
-                ['declare', 'À déclarer', data.toDeclare.length, FileCheck2],
-                ['done', 'Déclarées', data.declared.length, CheckCircle2],
+                ['todo', 'المهام', data.tickets.length, ClipboardList],
+                ['declare', 'للتسجيل', data.toDeclare.length, FileCheck2],
+                ['done', 'المسجلة', data.declared.length, CheckCircle2],
               ] as const).map(([id, label, count, Icon]) => (
                 <button
                   key={id}
@@ -231,16 +236,16 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({ 
             <p dir="auto" className="text-base font-semibold text-slate-800">{screen.message}</p>
             <div className="flex flex-col gap-2">
               {openedFromDeepLink && insideTelegram() && (
-                <button onClick={() => telegramApp()?.close()} className="h-12 rounded-xl bg-brand-navy-900 text-white font-bold">Fermer</button>
+                <button onClick={() => telegramApp()?.close()} className="h-12 rounded-xl bg-brand-navy-900 text-white font-bold">إغلاق</button>
               )}
-              <button onClick={backToList} className="h-12 rounded-xl bg-slate-100 text-slate-800 font-bold">Voir mes interventions</button>
+              <button onClick={backToList} className="h-12 rounded-xl bg-slate-100 text-slate-800 font-bold">تدخلاتي</button>
             </div>
           </div>
         )}
 
         {screen.kind === 'list' && tab === 'todo' && (
           <TicketList
-            empty="Aucune intervention en cours. Les nouveaux tickets apparaissent ici dès que l'orienteur vous les affecte."
+            empty="لا توجد تدخلات حاليا. التذاكر الجديدة تظهر هنا عندما يسندها لك المنسق."
             tickets={[...data.tickets].sort((a, b) => splitterCount(b) - splitterCount(a) || (a.splitterRef || '').localeCompare(b.splitterRef || ''))}
             splitterCount={splitterCount}
             actions={t => (
@@ -266,17 +271,17 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({ 
         {screen.kind === 'list' && tab === 'todo' && (data.onHold?.length || 0) > 0 && (
           <div className="mt-5 space-y-2">
             <div className="text-xs font-bold uppercase tracking-wider text-slate-500 px-1">
-              ⏸ En attente ({data.onHold!.length}) · suspendus par l'orienteur
+              ⏸ في الانتظار ({data.onHold!.length}) · موقوفة من طرف المنسق
             </div>
             {data.onHold!.map(t => (
               <div key={t.id} className="bg-slate-100 border border-slate-200 rounded-2xl p-3 text-sm text-slate-700">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono font-bold text-slate-900">{t.ticketNumber}</span>
-                  <span className="text-[11px] font-semibold bg-slate-200 rounded-full px-2 py-0.5">{t.lastLitigeReasonLabel || 'Litige'}</span>
+                  <span dir="ltr" className="font-mono font-bold text-slate-900">{t.ticketNumber}</span>
+                  <span className="text-[11px] font-semibold bg-slate-200 rounded-full px-2 py-0.5">{litigeLabel(t) || 'Litige'}</span>
                 </div>
-                <div>{t.clientName}</div>
-                {t.lastLitigeRdvDate && <div className="font-semibold text-slate-900">📅 RDV le {formatRdvDate(t.lastLitigeRdvDate)}</div>}
-                <div className="text-[11px] text-slate-500 mt-1">Il reviendra dans « À faire » quand l'orienteur le relancera.</div>
+                <div dir="auto">{t.clientName}</div>
+                {t.lastLitigeRdvDate && <div className="font-semibold text-slate-900">📅 RDV : <span dir="ltr">{formatRdvDate(t.lastLitigeRdvDate)}</span></div>}
+                <div className="text-[11px] text-slate-500 mt-1">سيرجع إلى « المهام » عندما يعيد المنسق إرساله.</div>
               </div>
             ))}
           </div>
@@ -284,8 +289,8 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({ 
 
         {screen.kind === 'list' && tab === 'declare' && (
           <TicketList
-            empty="Aucune prestation à déclarer. Merci !"
-            intro="Interventions clôturées en NF dont la prestation n'est pas encore déclarée."
+            empty="لا توجد أشغال للتسجيل. شكرا !"
+            intro="تدخلات مغلقة بـ NF لم تُسجَّل أشغالها بعد."
             tickets={data.toDeclare}
             splitterCount={() => 1}
             showClosedAt
@@ -294,7 +299,7 @@ export const TechnicianMobilePortal: React.FC<TechnicianMobilePortalProps> = ({ 
                 onClick={() => setScreen({ kind: 'form', ticket: t, mode: 'declare', groupSize: 1 })}
                 className="w-full h-12 rounded-xl bg-brand-orange-500 active:bg-brand-orange-600 text-white font-bold text-sm"
               >
-                📝 Déclarer la prestation
+                📝 تسجيل الأشغال
               </button>
             )}
           />
@@ -313,7 +318,7 @@ const FullMessage: React.FC<{ tone: 'error' | 'warning'; title: string; text: st
     </div>
     <h1 className="text-xl font-bold text-slate-900">{title}</h1>
     <p className="text-sm text-slate-600 mt-2 max-w-sm">{text}</p>
-    {onBack && <button onClick={onBack} className="mt-6 px-4 py-2 bg-slate-200 text-slate-800 text-xs rounded-xl">Retour</button>}
+    {onBack && <button onClick={onBack} className="mt-6 px-4 py-2 bg-slate-200 text-slate-800 text-xs rounded-xl">رجوع</button>}
   </div>
 );
 
@@ -339,13 +344,13 @@ const TicketList: React.FC<{
         <div key={t.id} className={`bg-white rounded-2xl border p-4 space-y-3 ${group > 1 ? 'border-brand-orange-400 border-l-4' : 'border-slate-200'}`}>
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div className="font-mono font-bold text-base text-slate-900">{t.ticketNumber}</div>
-              {showClosedAt && t.closedAt && <div className="text-[11px] text-slate-500">NF le {formatCasablancaDateTime(t.closedAt)}</div>}
+              <div dir="ltr" className="font-mono font-bold text-base text-slate-900 text-right">{t.ticketNumber}</div>
+              {showClosedAt && t.closedAt && <div className="text-[11px] text-slate-500">NF : <span dir="ltr">{formatCasablancaDateTime(t.closedAt)}</span></div>}
               {!showClosedAt && <SlaChip registeredAt={t.registeredAt} />}
             </div>
             <div className="flex flex-col items-end gap-1">
               {t.splitterRef && (
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${group > 1 ? 'bg-brand-orange-500 text-white' : 'bg-brand-orange-50 text-brand-orange-600'}`}>
+                <span dir="ltr" className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${group > 1 ? 'bg-brand-orange-500 text-white' : 'bg-brand-orange-50 text-brand-orange-600'}`}>
                   🔌 {t.splitterRef}{group > 1 ? ` · ${group} tickets` : ''}
                 </span>
               )}
@@ -358,44 +363,44 @@ const TicketList: React.FC<{
           </div>
           {t.currentStatus === 'REOPENED' && (t.reopenedWithNewPhone || t.lastDispatcherUpdateNotes) && (
             <div className="text-sm bg-sky-50 border-2 border-sky-300 text-sky-950 rounded-xl px-3 py-2.5 space-y-2">
-              <div className="font-bold text-sky-900">↩️ Retour de l'orienteur</div>
+              <div className="font-bold text-sky-900">↩️ رجوع من المنسق</div>
               {t.reopenedWithNewPhone && (
                 <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-sky-700">Nouveau numéro à appeler</div>
-                  <a href={`tel:${formatPhoneIntl(t.reopenedWithNewPhone.split('/')[0]).replace(/\s/g, '')}`} className="text-lg font-bold text-sky-900 underline">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-sky-700">رقم جديد للاتصال</div>
+                  <a dir="ltr" href={`tel:${formatPhoneIntl(t.reopenedWithNewPhone.split('/')[0]).replace(/\s/g, '')}`} className="inline-block text-lg font-bold text-sky-900 underline">
                     {formatPhonesIntl(t.reopenedWithNewPhone)}
                   </a>
-                  {t.previousClientPhone && <div className="text-xs text-slate-500 line-through">Ancien : {formatPhonesIntl(t.previousClientPhone)}</div>}
+                  {t.previousClientPhone && <div className="text-xs text-slate-500 line-through">الرقم القديم : <span dir="ltr">{formatPhonesIntl(t.previousClientPhone)}</span></div>}
                 </div>
               )}
               {t.lastDispatcherUpdateNotes && (
                 <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-sky-700">Consigne</div>
-                  <div>« {t.lastDispatcherUpdateNotes} »</div>
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-sky-700">ملاحظة المنسق</div>
+                  <div dir="auto">« {t.lastDispatcherUpdateNotes} »</div>
                 </div>
               )}
             </div>
           )}
           {t.importOutcome === 'REPRISE' && (
             <div className="text-sm bg-rose-50 border border-rose-200 text-rose-900 rounded-xl px-3 py-2">
-              🔁 <b>Reprise</b> : le client a de nouveau réclamé après l'intervention.{t.nonBillable ? ' Non facturable.' : ''}
+              🔁 <b>REPRISE</b> : الزبون اشتكى من جديد بعد التدخل.{t.nonBillable ? ' إعادة لتدخلك : بدون مقابل.' : ''}
             </div>
           )}
           {t.importOutcome === 'RETOUR_CLIENT' && (
             <div className="text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-3 py-2">
-              ↩️ <b>Retour client</b>{t.lastLitigeReasonLabel ? ` · litige précédent : ${t.lastLitigeReasonLabel}` : ''}
+              ↩️ <b>RETOUR CLIENT</b>{litigeLabel(t) ? ` · النزاع السابق : ${litigeLabel(t)}` : ''}
             </div>
           )}
-          {t.description && <div className="text-sm text-violet-900 bg-violet-50 rounded-lg px-2.5 py-1.5">📝 {t.description}</div>}
+          {t.description && <div dir="auto" className="text-sm text-violet-900 bg-violet-50 rounded-lg px-2.5 py-1.5">📝 {t.description}</div>}
           <div className="space-y-1 text-sm">
-            <div className="font-bold text-slate-900">{t.clientName}</div>
+            <div dir="auto" className="font-bold text-slate-900">{t.clientName}</div>
             <div className="flex items-start gap-1.5 text-slate-600">
               <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-              <span>{t.clientAddress} <span className="font-semibold">({t.rawZoneText})</span></span>
+              <span dir="ltr" className="text-left">{t.clientAddress} <span className="font-semibold">({t.rawZoneText})</span></span>
             </div>
             {/* Each number is a tap-to-call link (international format) */}
             {t.clientPhone && t.clientPhone.split(/[\/,;]/).map(p => p.trim()).filter(Boolean).map(phone => (
-              <a key={phone} href={`tel:${formatPhoneIntl(phone).replace(/\s/g, '')}`} className="flex items-center gap-1.5 text-brand-navy-700 font-bold font-mono py-0.5">
+              <a key={phone} dir="ltr" href={`tel:${formatPhoneIntl(phone).replace(/\s/g, '')}`} className="flex items-center justify-end gap-1.5 text-brand-navy-700 font-bold font-mono py-0.5">
                 <Phone className="w-4 h-4" /> {formatPhoneIntl(phone)}
               </a>
             ))}
@@ -415,7 +420,7 @@ const DeclaredList: React.FC<{ tickets: PortalTicket[] }> = ({ tickets }) => {
     return {
       count: recent.length,
       byCode: PRESTATIONS.map(p => ({
-        label: p.label,
+        label: p.techLabel,
         count: recent.filter(t => t.prestation!.code === p.code).length,
         raccordements: p.withRaccordements ? recent.filter(t => t.prestation!.code === p.code).reduce((n, t) => n + (t.prestation!.raccordements || 0), 0) : undefined,
       })),
@@ -428,29 +433,29 @@ const DeclaredList: React.FC<{ tickets: PortalTicket[] }> = ({ tickets }) => {
   return (
     <div className="space-y-3">
       <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">7 derniers jours · {totals.count} prestation(s)</div>
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">آخر 7 أيام · {totals.count} أشغال</div>
         <div className="grid grid-cols-2 gap-2 text-sm">
           {totals.byCode.map(c => (
             <div key={c.label} className="bg-slate-50 rounded-xl px-3 py-2">
               <div className="text-xl font-bold font-mono text-slate-900">{c.count}</div>
-              <div className="text-[11px] text-slate-600">{c.label}{c.raccordements ? ` · ${c.raccordements} racc.` : ''}</div>
+              <div dir="ltr" className="text-[11px] text-slate-600 text-right">{c.label}{c.raccordements ? ` · ${c.raccordements} racc.` : ''}</div>
             </div>
           ))}
         </div>
-        <div className="text-xs text-slate-600">Matériel : <b>{describeMaterials({ joints: totals.joints, splitters: totals.splitters, cableMeters: totals.cable })}</b></div>
+        <div className="text-xs text-slate-600">المعدات : <b dir="auto" className="inline-block">{describeMaterialsAr({ joints: totals.joints, splitters: totals.splitters, cableMeters: totals.cable })}</b></div>
       </div>
-      {tickets.length === 0 && <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">Aucune prestation déclarée ces 30 derniers jours.</div>}
+      {tickets.length === 0 && <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">لا توجد أشغال مسجلة خلال آخر 30 يوما.</div>}
       {tickets.map(t => (
         <div key={t.id} className="bg-white rounded-2xl border border-slate-200 p-3 text-sm flex items-start justify-between gap-3">
           <div>
-            <div className="font-mono font-bold">{t.ticketNumber}</div>
-            <div className="text-slate-600">{t.clientName}</div>
-            <div className="text-[11px] text-slate-500">{t.prestation && formatCasablancaDateTime(t.prestation.declaredAt)}</div>
+            <div dir="ltr" className="font-mono font-bold text-right">{t.ticketNumber}</div>
+            <div dir="auto" className="text-slate-600">{t.clientName}</div>
+            <div dir="ltr" className="text-[11px] text-slate-500 text-right">{t.prestation && formatCasablancaDateTime(t.prestation.declaredAt)}</div>
           </div>
-          <div className="text-right">
-            <div className="font-bold text-slate-900">{prestationLabel(t.prestation?.code)}{t.prestation?.raccordements ? ` × ${t.prestation.raccordements}` : ''}</div>
-            <div className="text-[11px] text-slate-600">{t.prestation && describeMaterials(t.prestation.materials)}</div>
-            {!!t.prestation?.photoCount && <div className="text-[11px] text-slate-500">📷 {t.prestation.photoCount} photo(s)</div>}
+          <div className="text-left">
+            <div dir="auto" className="font-bold text-slate-900">{prestationTechLabel(t.prestation?.code)}{t.prestation?.raccordements ? ` × ${t.prestation.raccordements}` : ''}</div>
+            <div dir="auto" className="text-[11px] text-slate-600">{t.prestation && describeMaterialsAr(t.prestation.materials)}</div>
+            {!!t.prestation?.photoCount && <div className="text-[11px] text-slate-500">📷 {t.prestation.photoCount} صور</div>}
           </div>
         </div>
       ))}

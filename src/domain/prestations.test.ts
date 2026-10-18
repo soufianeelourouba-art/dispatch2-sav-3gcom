@@ -18,7 +18,7 @@ describe('validateDeclaration', () => {
   });
 
   it('exige une prestation', () => {
-    expect(validateDeclaration({ materials: none, materialPhotoCount: 0 })).toEqual(['Choisissez la prestation réalisée.']);
+    expect(validateDeclaration({ materials: none, materialPhotoCount: 0 })).toEqual(['اختر الأشغال المنجزة.']);
     expect(validateDeclaration({ code: 'FO_99', materialPhotoCount: 0 })).toHaveLength(1);
   });
 
@@ -32,7 +32,7 @@ describe('validateDeclaration', () => {
 
   it('matériel posé : photo obligatoire', () => {
     expect(validateDeclaration({ code: 'FO_04', materials: { ...none, joints: 2 }, materialPhotoCount: 0 }))
-      .toEqual(['Prenez au moins une photo du matériel installé.']);
+      .toEqual(['التقط صورة واحدة على الأقل للمعدات المركبة.']);
     expect(validateDeclaration({ code: 'FO_04', materials: { ...none, cableMeters: 120 }, materialPhotoCount: 1 })).toEqual([]);
   });
 
@@ -88,6 +88,6 @@ describe('« Aucune action »', () => {
     expect(validateDeclaration({ code: 'AUCUNE', materials: none, materialPhotoCount: 0 })).toEqual([]);
   });
   it('refuse du matériel avec « Aucune action »', () => {
-    expect(validateDeclaration({ code: 'AUCUNE', materials: { ...none, joints: 2 }, materialPhotoCount: 1 }).join(' ')).toMatch(/pas de matériel/);
+    expect(validateDeclaration({ code: 'AUCUNE', materials: { ...none, joints: 2 }, materialPhotoCount: 1 }).join(' ')).toMatch(/لا توجد معدات/);
   });
 });

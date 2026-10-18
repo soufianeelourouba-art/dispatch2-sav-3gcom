@@ -39,6 +39,7 @@ const forTechnician = (t: Ticket, techId?: string) => ({
   registeredAt: t.registeredAt,
   visitCount: t.visitCount,
   currentStatus: t.currentStatus,
+  lastLitigeReasonCode: t.lastLitigeReasonCode,
   lastLitigeReasonLabel: t.lastLitigeReasonLabel,
   lastLitigeRdvDate: t.lastLitigeRdvDate,
   lastDispatcherUpdateNotes: t.lastDispatcherUpdateNotes,
@@ -88,12 +89,12 @@ function parseReport(raw: any): TechnicianReport {
     return { kind: 'NF', nfType: 'STANDARD', notes };
   }
   if (raw?.kind === 'LITIGE' && LITIGE_REASONS.some(r => r.code === raw.reasonCode)) {
-    // RDV: an ISO date (chosen with day + slot buttons in the app)
+    // RDV: "غدا" (tomorrow, ISO date) or "تاريخ آخر" (free text in the notes, as in Telegram)
     const rdv = typeof raw.rdvDateTime === 'string' && !Number.isNaN(Date.parse(raw.rdvDateTime))
       ? new Date(raw.rdvDateTime).toISOString()
       : undefined;
-    if (raw.reasonCode === 'RDV' && !rdv) throw new HttpError(400, "Choisissez le jour et l'heure du RDV.");
-    if (raw.reasonCode === 'AUTRE' && !notes?.trim()) throw new HttpError(400, 'Décrivez le motif du litige.');
+    if (raw.reasonCode === 'RDV' && !rdv && !notes?.trim()) throw new HttpError(400, 'اختر « غدا » أو اكتب موعد الـ RDV.');
+    if (raw.reasonCode === 'AUTRE' && !notes?.trim()) throw new HttpError(400, 'اشرح المشكل.');
     return {
       kind: 'LITIGE',
       reasonCode: raw.reasonCode,
@@ -102,14 +103,14 @@ function parseReport(raw: any): TechnicianReport {
       requestNewContact: raw.reasonCode === 'CLIENT_UNREACHABLE' && raw.requestNewContact === true,
     };
   }
-  throw new HttpError(400, 'Compte-rendu invalide');
+  throw new HttpError(400, 'تقرير غير صالح.');
 }
 
 export async function POST(request: Request): Promise<Response> {
   try {
     const body = await request.json();
     const tech = await technicianFrom(body?.token);
-    if (technicianIsBlocked(tech)) throw new HttpError(403, 'Accès suspendu');
+    if (technicianIsBlocked(tech)) throw new HttpError(403, 'الحساب موقوف.');
     if (typeof body?.ticketId !== 'string') throw new HttpError(400, 'ticketId manquant');
     try {
       let tickets: Ticket[];

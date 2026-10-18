@@ -166,7 +166,13 @@ try {
     method: 'POST',
     body: JSON.stringify({ token: TOKEN, action: 'REPORT', ticketId: tid(5), report: { kind: 'LITIGE', reasonCode: 'RDV' } }),
   }));
-  check('App technicien : RDV sans date refusé', res.status === 400 && (await read(5)).currentStatus === 'ASSIGNED', res.status);
+  check('App technicien : RDV sans date ni texte refusé', res.status === 400 && (await read(5)).currentStatus === 'ASSIGNED', res.status);
+  const free = await portal(new Request('https://test.local/api/portal', {
+    method: 'POST',
+    body: JSON.stringify({ token: TOKEN, action: 'REPORT', ticketId: tid(5), report: { kind: 'LITIGE', reasonCode: 'RDV', notes: 'الأحد صباحا' } }),
+  }));
+  const t5 = await read(5);
+  check('App technicien : RDV « تاريخ آخر » en texte libre accepté', free.status === 200 && t5.currentStatus === 'LITIGE' && t5.lastLitigeNotes === 'الأحد صباحا', free.status);
 } finally {
   const refs = [
     ...(await db.collection('events').where('sectorId', '==', SECTOR).get()).docs.map(d => d.ref),

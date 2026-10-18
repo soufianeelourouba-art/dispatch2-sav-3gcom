@@ -13,7 +13,7 @@ function loadImage(file: File): Promise<HTMLImageElement> {
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error('Image illisible'));
+      reject(new Error('الصورة غير واضحة'));
     };
     img.src = url;
   });
@@ -34,5 +34,5 @@ export async function compressPhoto(file: File): Promise<string> {
     side = Math.round(side * 0.8);
     quality = Math.max(0.45, quality - 0.08);
   }
-  throw new Error('Photo trop lourde, reprenez-la.');
+  throw new Error('الصورة ثقيلة جدا، أعد التقاطها.');
 }

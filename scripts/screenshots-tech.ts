@@ -36,7 +36,7 @@ await page.route('**/api/portal**', route =>
 const shot = (name: string, fullPage = false) => page.screenshot({ path: join(outDir, `${name}.png`), fullPage });
 
 await page.goto(`${baseUrl}/?act=act_demo123456`);
-await page.getByText('À faire').first().waitFor();
+await page.getByText('المهام').first().waitFor();
 await shot('1-a-faire');
 
 await page.getByRole('button', { name: 'NF', exact: true }).first().click();
@@ -52,17 +52,22 @@ await shot('3-erreurs');
 await page.getByRole('button', { name: 'رجوع' }).click();
 await page.getByRole('button', { name: 'Litige', exact: true }).first().click();
 await page.getByRole('button', { name: 'RDV', exact: true }).click();
-await page.getByRole('button', { name: /^Demain/ }).click();
-await page.getByRole('button', { name: '14h', exact: true }).click();
-await page.getByText('Heure', { exact: true }).scrollIntoViewIfNeeded();
+await page.getByRole('button', { name: '🗓 تاريخ آخر' }).click();
+await page.getByPlaceholder('مثال : 20/10 15h').fill('20/10 15h');
 await shot('6-litige-rdv');
 await page.getByRole('button', { name: 'لا يجيب' }).click();
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot('7-litige-injoignable');
-await page.getByRole('button', { name: 'Retour' }).click();
-await page.getByRole('button', { name: /À déclarer/ }).click();
+await page.getByRole('button', { name: 'رجوع' }).click();
+await page.getByRole('button', { name: /للتسجيل/ }).click();
 await shot('4-a-declarer');
-await page.getByRole('button', { name: /Déclarées/ }).click();
+await page.getByRole('button', { name: '📝 تسجيل الأشغال' }).first().click();
+await page.getByRole('button', { name: '01-02 FO' }).click();
+await page.getByRole('button', { name: 'نعم، ركبت معدات' }).click();
+await page.evaluate(() => window.scrollTo(0, 0));
+await shot('4b-formulaire-travaux');
+await page.getByRole('button', { name: 'رجوع' }).click();
+await page.getByRole('button', { name: /المسجلة/ }).click();
 await shot('5-mes-prestations');
 
 await browser.close();

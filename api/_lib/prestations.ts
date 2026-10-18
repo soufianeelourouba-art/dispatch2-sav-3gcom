@@ -45,10 +45,10 @@ export interface NfFormPayload {
 
 function checkPhotos(photos: unknown): string[] {
   if (photos === undefined) return [];
-  if (!Array.isArray(photos) || photos.length > LIMITS.photosPerKind) throw new ValidationError([`${LIMITS.photosPerKind} photos maximum.`]);
+  if (!Array.isArray(photos) || photos.length > LIMITS.photosPerKind) throw new ValidationError([`${LIMITS.photosPerKind} صور كحد أقصى.`]);
   for (const p of photos) {
     if (typeof p !== 'string' || p.length > MAX_PHOTO_CHARS || !PHOTO_PREFIX.test(p)) {
-      throw new ValidationError(['Photo illisible ou trop lourde, reprenez-la.']);
+      throw new ValidationError(['الصورة غير واضحة أو ثقيلة جدا، أعد التقاطها.']);
     }
   }
   return photos as string[];
@@ -90,7 +90,7 @@ function checkDeclaration(payload: DeclarationPayload): { code: PrestationCode; 
 
 async function loadTicket(ticketId: string): Promise<Ticket> {
   const snap = await adminDb().collection('tickets').doc(ticketId).get();
-  if (!snap.exists) throw new AccessError('Ticket introuvable.');
+  if (!snap.exists) throw new AccessError('Ticket غير موجود.');
   return { ...(snap.data() as Ticket), id: snap.id };
 }
 
@@ -98,9 +98,9 @@ async function loadTicket(ticketId: string): Promise<Ticket> {
 export async function declarePrestation(tech: Technician, ticketId: string, payload: DeclarationPayload): Promise<Ticket> {
   const checked = checkDeclaration(payload);
   const ticket = await loadTicket(ticketId);
-  if (ticket.currentAssignedTechId !== tech.id) throw new AccessError('Ce ticket ne vous est pas affecté.');
-  if (ticket.prestationStatus === 'INCLUSE') throw new AccessError('Ce ticket est inclus dans un incident splitter déjà déclaré sur un autre ticket.');
-  if (!needsDeclaration(ticket)) throw new AccessError('La prestation de ce ticket est déjà déclarée ou le ticket n\'est pas clôturé en NF.');
+  if (ticket.currentAssignedTechId !== tech.id) throw new AccessError('هذا Ticket غير مسند إليك.');
+  if (ticket.prestationStatus === 'INCLUSE') throw new AccessError('هذا Ticket داخل في عطب Splitter مسجل في Ticket آخر.');
+  if (!needsDeclaration(ticket)) throw new AccessError('أشغال هذا Ticket مسجلة من قبل، أو Ticket غير مغلق بـ NF.');
 
   const photoIds = await savePhotos(tech, ticket, 'MATERIAL', checked.photos);
   const now = new Date().toISOString();

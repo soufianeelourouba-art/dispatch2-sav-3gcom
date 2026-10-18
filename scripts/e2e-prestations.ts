@@ -57,7 +57,7 @@ try {
     action: 'NF_FORM', ticketId: `tkt-${ID}-1`, nfType: 'CENTRAL_CONFIG', ontSerialNumber: 'alcl b123 4567', serialPhotos: [PHOTO],
     declaration: { code: 'FO_01_02', raccordements: 2, materials: { joints: 0, splitters: 0, cableMeters: 50 } },
   });
-  check('Matériel sans photo → refusé avant clôture', r.status === 400 && /photo du matériel/.test(r.data.error), r);
+  check('Matériel sans photo → refusé avant clôture', r.status === 400 && /صورة واحدة على الأقل للمعدات/.test(r.data.error), r);
   check('… et le ticket reste ouvert', (await read(1)).isClosed === false);
 
   r = await call('POST', {

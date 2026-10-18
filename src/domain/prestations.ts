@@ -7,13 +7,26 @@ export type PrestationCode = 'FO_01_02' | 'FO_04' | 'FO_08' | 'FO_32' | 'AUCUNE'
 
 // "Aucune action": NF without any work to pay (nothing connected, no material). It counts as
 // declared, so the ticket leaves "À déclarer", and is never paid.
-export const PRESTATIONS: { code: PrestationCode; label: string; withRaccordements?: boolean; noWork?: boolean }[] = [
-  { code: 'FO_01_02', label: '01-02 FO', withRaccordements: true },
-  { code: 'FO_04', label: '04 FO' },
-  { code: 'FO_08', label: '08 FO' },
-  { code: 'FO_32', label: '32 FO (splitter)' },
-  { code: 'AUCUNE', label: 'Aucune action', noWork: true },
+// label: orienteur / manager screens; techLabel: technician app (Arabic, FO codes kept in French)
+export const PRESTATIONS: { code: PrestationCode; label: string; techLabel: string; withRaccordements?: boolean; noWork?: boolean }[] = [
+  { code: 'FO_01_02', label: '01-02 FO', techLabel: '01-02 FO', withRaccordements: true },
+  { code: 'FO_04', label: '04 FO', techLabel: '04 FO' },
+  { code: 'FO_08', label: '08 FO', techLabel: '08 FO' },
+  { code: 'FO_32', label: '32 FO (splitter)', techLabel: '32 FO (Splitter)' },
+  { code: 'AUCUNE', label: 'Aucune action', techLabel: 'بدون أشغال', noWork: true },
 ];
+
+export const prestationTechLabel = (code?: string) => PRESTATIONS.find(p => p.code === code)?.techLabel || '—';
+
+// Installed material in the technician's words (technical names in French)
+export function describeMaterialsAr(m: MaterialsInstalled): string {
+  const parts = [
+    m.joints > 0 ? `${m.joints} Joints` : '',
+    m.splitters > 0 ? `${m.splitters} Splitters` : '',
+    m.cableMeters > 0 ? `${m.cableMeters} m Câble` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'بدون معدات';
+}
 
 // Prestations that have a price
 export const PAID_PRESTATIONS = PRESTATIONS.filter(p => !p.noWork);
@@ -88,28 +101,29 @@ export interface DeclarationInput {
 const isWholeNumber = (n: unknown, max: number) =>
   typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= max;
 
-// Returns the list of problems (empty = valid). Messages are shown as is to the technician.
+// Returns the list of problems (empty = valid). Messages are shown as is to the technician:
+// simple Arabic, technical words (FO, raccordements, joints, splitters, câble) in French.
 export function validateDeclaration(input: DeclarationInput): string[] {
   const errors: string[] = [];
   const prestation = PRESTATIONS.find(p => p.code === input.code);
   if (!prestation) {
-    errors.push('Choisissez la prestation réalisée.');
+    errors.push('اختر الأشغال المنجزة.');
   } else if (prestation.withRaccordements) {
     if (!isWholeNumber(input.raccordements, MAX_RACCORDEMENTS) || !input.raccordements) {
-      errors.push(`Indiquez le nombre de raccordements (1 à ${MAX_RACCORDEMENTS}).`);
+      errors.push(`أدخل عدد raccordements (من 1 إلى ${MAX_RACCORDEMENTS}).`);
     }
   }
 
   const m = { joints: 0, splitters: 0, cableMeters: 0, ...input.materials };
-  if (!isWholeNumber(m.joints, LIMITS.joints)) errors.push(`Nombre de joints invalide (0 à ${LIMITS.joints}).`);
-  if (!isWholeNumber(m.splitters, LIMITS.splitters)) errors.push(`Nombre de splitters invalide (0 à ${LIMITS.splitters}).`);
-  if (!isWholeNumber(m.cableMeters, LIMITS.cableMeters)) errors.push(`Longueur de câble invalide (0 à ${LIMITS.cableMeters} m).`);
+  if (!isWholeNumber(m.joints, LIMITS.joints)) errors.push(`عدد Joints غير صحيح (من 0 إلى ${LIMITS.joints}).`);
+  if (!isWholeNumber(m.splitters, LIMITS.splitters)) errors.push(`عدد Splitters غير صحيح (من 0 إلى ${LIMITS.splitters}).`);
+  if (!isWholeNumber(m.cableMeters, LIMITS.cableMeters)) errors.push(`طول Câble غير صحيح (من 0 إلى ${LIMITS.cableMeters} m).`);
   if (prestation?.noWork && hasMaterials(m)) {
-    errors.push('« Aucune action » : pas de matériel à déclarer. Choisissez la prestation réalisée si vous avez posé du matériel.');
+    errors.push('« بدون أشغال » : لا توجد معدات للتسجيل. إذا ركبت معدات، اختر الأشغال المنجزة.');
   } else if (hasMaterials(m) && input.materialPhotoCount < 1) {
-    errors.push('Prenez au moins une photo du matériel installé.');
+    errors.push('التقط صورة واحدة على الأقل للمعدات المركبة.');
   }
-  if (input.materialPhotoCount > LIMITS.photosPerKind) errors.push(`${LIMITS.photosPerKind} photos maximum.`);
+  if (input.materialPhotoCount > LIMITS.photosPerKind) errors.push(`${LIMITS.photosPerKind} صور كحد أقصى.`);
   return errors;
 }
 

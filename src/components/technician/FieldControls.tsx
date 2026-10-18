@@ -71,7 +71,7 @@ export const PhotoPicker: React.FC<{
       }
       onChange([...photos, ...added]);
     } catch (err: any) {
-      setError(err?.message || 'Photo illisible.');
+      setError(err?.message || 'الصورة غير واضحة.');
     } finally {
       setBusy(false);
       if (input.current) input.current.value = '';
